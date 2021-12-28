@@ -1,11 +1,14 @@
+"""Command-line interface for intercompy"""
 import click
-import intercompy.config as config
-import intercompy.convo as convo
+
+from intercompy.config import load
+from intercompy.convo import print_help, start
 
 
 @click.command()
 @click.option("--config-file", "-c", help="Alternative config YAML")
 def run(config_file: str = None):
-    cfg = config.load(config_file)
-    convo.print_help()
-    convo.start(cfg)
+    """Start the bot listening for intercom messages"""
+    cfg = load(config_file)
+    print_help()
+    start(cfg)

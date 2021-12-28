@@ -1,19 +1,19 @@
-from typing import Tuple
-
-import vlc
-import ffmpy
-
-from sys import byteorder
+"""
+Capture and play audio for use with Telegram. Uses ffmpeg for recording and vlc for playback.
+"""
+import os
+import wave
 from array import array
 from struct import pack
-
-from pyaudio import PyAudio, paInt16
-import wave
-import os
-
+from sys import byteorder
 from tempfile import NamedTemporaryFile
+from typing import Tuple
 
-from intercompy.config import WAV_THRESHOLD, Config
+import ffmpy
+import vlc
+from pyaudio import PyAudio, paInt16
+
+from intercompy.config import Config
 
 WAV_FORMAT = paInt16
 WAV_CHUNK_SIZE = 4096
@@ -24,24 +24,25 @@ WAV_CHUNK_SIZE = 4096
 
 def is_silent(snd_data: array, cfg: Config) -> bool:
     "Returns 'True' if below the 'silent' threshold"
-    return max(snd_data) < WAV_THRESHOLD
+    return max(snd_data) < cfg.wav_threshold
 
 
 def trim(snd_data: array, cfg: Config) -> array:
-    "Trim the blank spots at the start and end"
+    """Trim the blank spots at the start and end
+    """
 
-    def _trim(sd: array, c: Config) -> array:
+    def _trim(_sd: array, _c: Config) -> array:
         snd_started = False
-        r = array("h")
+        _r = array("h")
 
-        for i in sd:
-            if not snd_started and abs(i) > WAV_THRESHOLD:
+        for i in _sd:
+            if not snd_started and abs(i) > cfg.wav_threshold:
                 snd_started = True
-                r.append(i)
+                _r.append(i)
 
             elif snd_started:
-                r.append(i)
-        return r
+                _r.append(i)
+        return _r
 
     # Trim to the left
     snd_data = _trim(snd_data, cfg)
@@ -54,6 +55,10 @@ def trim(snd_data: array, cfg: Config) -> array:
 
 
 def detect_input(pyaudio: PyAudio, cfg: Config) -> dict:
+    """
+    Find the audio input device
+    """
+
     input_info = pyaudio.get_default_input_device_info()
     if input_info is None:
         pyaudio = PyAudio()
@@ -67,7 +72,8 @@ def detect_input(pyaudio: PyAudio, cfg: Config) -> dict:
     return input_info
 
 
-def record_wav(pyaudio: PyAudio, input_info: dict, cfg: Config, channels: int = 1) -> Tuple[int, array]:
+def record_wav(pyaudio: PyAudio, input_info: dict, cfg: Config, channels: int = 1) \
+        -> Tuple[int, array]:
     """
     Record a word or words from the microphone and
     return the data as an array of signed shorts.
@@ -89,14 +95,14 @@ def record_wav(pyaudio: PyAudio, input_info: dict, cfg: Config, channels: int = 
     num_silent = 0
     snd_started = False
 
-    r = array("h")
+    _r = array("h")
 
     while True:
         # little endian, signed short
         snd_data = array("h", stream.read(WAV_CHUNK_SIZE, exception_on_overflow=False))
         if byteorder == "big":
             snd_data.byteswap()
-        r.extend(snd_data)
+        _r.extend(snd_data)
 
         silent = is_silent(snd_data, cfg)
 
@@ -113,52 +119,49 @@ def record_wav(pyaudio: PyAudio, input_info: dict, cfg: Config, channels: int = 
     stream.close()
     pyaudio.terminate()
 
-    r = trim(r, cfg)
-    return sample_width, r
+    _r = trim(_r, cfg)
+    return sample_width, _r
 
 
-def record_ogg(cfg: Config) -> str:
-    "Records from the microphone and outputs the resulting data to 'path'"
-
-    wavfile = NamedTemporaryFile(
-        "wb", prefix="intercom.recording.", suffix=".wav", delete=False
-    )
-    oggfile = NamedTemporaryFile(
-        "wb", prefix="intercom.voice-out.", suffix=".ogg", delete=False
-    )
+def record_ogg(oggfile: NamedTemporaryFile, cfg: Config) -> str:
+    """Records from the microphone and outputs the resulting data to 'path'
+    """
 
     pyaudio = PyAudio()
     input_info = detect_input(pyaudio, cfg)
-    channels = int(input_info.get("maxInputChannels"))
-    if channels > 4:
-        channels = 4
+    channels = min(int(input_info.get("maxInputChannels")), 4)
 
     sample_width, data = record_wav(pyaudio, input_info, cfg, channels)
     data = pack("<" + ("h" * len(data)), *data)
 
-    with wave.open(wavfile.name, "wb") as wf:
-        wf.setnchannels(channels)
-        wf.setsampwidth(sample_width)
-        wf.setframerate(int(input_info.get("defaultSampleRate")))
-        wf.writeframes(data)
+    with NamedTemporaryFile(
+        "wb", prefix="intercom.recording.", suffix=".wav", delete=False
+    ) as wavfile:
 
-    ffmpeg = ffmpy.FFmpeg(
-        inputs={wavfile.name: None}, outputs={oggfile.name: ["-y", "-f", "ogg"]}
-    )
-    ffmpeg.run()
+        with wave.open(wavfile.name, mode="wb") as _wf:
+            _wf.setnchannels(channels)
+            _wf.setsampwidth(sample_width)
+            _wf.setframerate(int(input_info.get("defaultSampleRate")))
+            _wf.writeframes(data)
+
+        ffmpeg = ffmpy.FFmpeg(
+            inputs={wavfile.name: None}, outputs={oggfile.name: ["-y", "-f", "ogg"]}
+        )
+        ffmpeg.run()
 
     os.remove(wavfile.name)
 
-    return oggfile.name
-
 
 def playback_ogg(filename: str, cfg: Config):
-    volume = 75  # TODO: Replace with config param
+    """ Play a .ogg file using VLC
+    """
+    # TODO: Replace with config param
+    volume = 75
 
-    v = vlc.Instance("--aout=alsa")
-    p = v.media_player_new()
-    vlc.libvlc_audio_set_volume(p, volume)
+    _v = vlc.Instance("--aout=alsa")
+    _p = _v.media_player_new()
+    vlc.libvlc_audio_set_volume(_p, volume)
 
-    m = v.media_new(filename)
-    p.set_media(m)
-    p.play()
+    _m = _v.media_new(filename)
+    _p.set_media(_m)
+    _p.play()

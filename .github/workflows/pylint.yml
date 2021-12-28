@@ -22,4 +22,4 @@ jobs:
         pip install -e .
     - name: Analysing the code with pylint
       run: |
-        pylint `ls -R|grep .py$|xargs`
+        pylint intercompy

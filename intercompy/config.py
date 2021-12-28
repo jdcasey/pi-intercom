@@ -1,3 +1,4 @@
+"""Handle configuration for intercompy bot"""
 import os
 from ruamel.yaml import YAML
 
@@ -12,10 +13,17 @@ CHAT = "chat"
 
 # TODO: Make these configurable!!
 
-WAV_THRESHOLD = 500
+_WAV_THRESHOLD = 500
 
 
 def load(config_file: str = None):
+    """
+    Load configuration, starting with the specified file if available.
+    If not, try to load from one of two standard locations, in the
+    following order of precedence:
+        $HOME/.config/intercompy/config.yaml
+        /etc/intercompy/config.yaml
+    """
     config_path = config_file or HOME_CONFIG_FILE
     if os.path.exists(config_path) is not True:
         config_path = ETC_CONFIG_FILE
@@ -26,13 +34,16 @@ def load(config_file: str = None):
             f"{ETC_CONFIG_FILE}"
         )
 
-    with open(config_path) as f:
-        data = YAML().load(f)
+    with open(config_path, encoding="utf-8") as _f:
+        data = YAML().load(_f)
 
     return Config(data)
 
 
 class Config:
+    """Contain the configuration parameters for intercompy
+    """
     def __init__(self, data):
         self.token = data.get(TOKEN)
         self.chat = data.get(CHAT)
+        self.wav_threshold = _WAV_THRESHOLD
