@@ -9,11 +9,12 @@ HOME_CONFIG_FILE = os.path.join(
 )
 TOKEN = "token"
 CHAT = "chat"
+WAV_THRESHOLD = "wav-threshold"
+VOLUME = "playback-volume"
+AUDIO_DEVICE = "audio-device"
 
-
-# TODO: Make these configurable!!
-
-_WAV_THRESHOLD = 500
+DEFAULT_VOLUME = 75
+DEFAULT_WAV_THRESHOLD = 500
 
 
 def load(config_file: str = None):
@@ -46,4 +47,24 @@ class Config:
     def __init__(self, data):
         self.token = data.get(TOKEN)
         self.chat = data.get(CHAT)
-        self.wav_threshold = _WAV_THRESHOLD
+        self.wav_threshold = data.get(WAV_THRESHOLD) or DEFAULT_WAV_THRESHOLD
+        self.volume = data.get(VOLUME) or DEFAULT_VOLUME
+        self.audio_device_index = data.get(AUDIO_DEVICE)
+
+    def print(self):
+        """Print a diagnostic message containing this configuration"""
+        print(f"Token: {self.token}"
+              f"\nChat: {self.chat}"
+              f"\nWAV Threshold:{self.wav_threshold}"
+              f"\nPlayback volume: {self.volume}"
+              f"\nAudio device index: {self.audio_device_index}")
+
+    def dump(self, stream):
+        """Dump the config as YAML to the specified stream"""
+        YAML().dump({
+            TOKEN: self.token,
+            CHAT: self.chat,
+            WAV_THRESHOLD: self.wav_threshold,
+            VOLUME: self.volume,
+            AUDIO_DEVICE: self.audio_device_index,
+        }, stream)

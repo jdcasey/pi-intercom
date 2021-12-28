@@ -54,20 +54,36 @@ def trim(snd_data: array, cfg: Config) -> array:
     return snd_data
 
 
+def __is_valid_input(dev):
+    """Determine whether the given audio device is suitable for recording voice."""
+
+    return int(dev.get("maxInputChannels")) > 0
+
+
 def detect_input(pyaudio: PyAudio, cfg: Config) -> dict:
     """
     Find the audio input device
     """
 
-    input_info = pyaudio.get_default_input_device_info()
+    device_index = cfg.audio_device_index
+    input_info = None
+
+    if device_index is None:
+        input_info = pyaudio.get_default_input_device_info()
+
     if input_info is None:
         pyaudio = PyAudio()
-        lines = []
-        for idx in range(pyaudio.get_device_count()):
-            dev = pyaudio.get_device_info_by_index(idx)
-            if int(dev.get("maxInputChannels")) > 0:
+        device_count = pyaudio.get_device_count()
+        if device_index is not None and device_index < device_count-1:
+            dev = pyaudio.get_device_info_by_index(int(device_index))
+            if __is_valid_input(dev):
                 input_info = dev
-                break
+        else:
+            for idx in range(device_count):
+                dev = pyaudio.get_device_info_by_index(idx)
+                if __is_valid_input(dev):
+                    input_info = dev
+                    break
 
     return input_info
 
@@ -123,6 +139,15 @@ def record_wav(pyaudio: PyAudio, input_info: dict, cfg: Config, channels: int = 
     return sample_width, _r
 
 
+def __write_wav(input_info: dict, channels: int, sample_width: int, data: array,
+                _wf: wave.Wave_write):
+    """Take input from device recording (in memory) and write it to a WAV file"""
+    _wf.setnchannels(channels)
+    _wf.setsampwidth(sample_width)
+    _wf.setframerate(int(input_info.get("defaultSampleRate")))
+    _wf.writeframes(data)
+
+
 def record_ogg(oggfile: NamedTemporaryFile, cfg: Config) -> str:
     """Records from the microphone and outputs the resulting data to 'path'
     """
@@ -139,10 +164,7 @@ def record_ogg(oggfile: NamedTemporaryFile, cfg: Config) -> str:
     ) as wavfile:
 
         with wave.open(wavfile.name, mode="wb") as _wf:
-            _wf.setnchannels(channels)
-            _wf.setsampwidth(sample_width)
-            _wf.setframerate(int(input_info.get("defaultSampleRate")))
-            _wf.writeframes(data)
+            __write_wav(input_info, channels, sample_width, data, _wf)
 
         ffmpeg = ffmpy.FFmpeg(
             inputs={wavfile.name: None}, outputs={oggfile.name: ["-y", "-f", "ogg"]}
@@ -155,12 +177,9 @@ def record_ogg(oggfile: NamedTemporaryFile, cfg: Config) -> str:
 def playback_ogg(filename: str, cfg: Config):
     """ Play a .ogg file using VLC
     """
-    # TODO: Replace with config param
-    volume = 75
-
     _v = vlc.Instance("--aout=alsa")
     _p = _v.media_player_new()
-    vlc.libvlc_audio_set_volume(_p, volume)
+    vlc.libvlc_audio_set_volume(_p, cfg.volume)
 
     _m = _v.media_new(filename)
     _p.set_media(_m)
