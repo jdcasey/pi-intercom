@@ -4,7 +4,6 @@
 
 * ffmpeg
 * vlc
-* gifsicle
 
 ## Setup
 
