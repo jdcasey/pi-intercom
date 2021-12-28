@@ -57,7 +57,8 @@ def trim(snd_data: array, cfg: Config) -> array:
 def __is_valid_input(dev):
     """Determine whether the given audio device is suitable for recording voice."""
 
-    return int(dev.get("maxInputChannels")) > 0
+    in_channels = int(dev.get("maxInputChannels"))
+    return 0 < in_channels < 3
 
 
 def detect_input(pyaudio: PyAudio, cfg: Config) -> dict:
@@ -72,7 +73,6 @@ def detect_input(pyaudio: PyAudio, cfg: Config) -> dict:
         input_info = pyaudio.get_default_input_device_info()
 
     if input_info is None:
-        pyaudio = PyAudio()
         device_count = pyaudio.get_device_count()
         if device_index is not None and device_index < device_count-1:
             dev = pyaudio.get_device_info_by_index(int(device_index))
@@ -123,19 +123,27 @@ def record_wav(pyaudio: PyAudio, input_info: dict, cfg: Config, channels: int = 
         silent = is_silent(snd_data, cfg)
 
         if silent and snd_started:
+            print("Silent++")
             num_silent += 1
         elif not silent and not snd_started:
+            print("Sound started")
             snd_started = True
 
         if snd_started and num_silent > 30:
+            print("Got the recording. Formatting / returning")
             break
 
     sample_width = pyaudio.get_sample_size(WAV_FORMAT)
+    print("Got sample width")
     stream.stop_stream()
+    print("stream stopped")
     stream.close()
+    print("stream closed")
     pyaudio.terminate()
+    print("pyaudio terminated")
 
     _r = trim(_r, cfg)
+    print("audio sample has been trimmed")
     return sample_width, _r
 
 
@@ -184,3 +192,23 @@ def playback_ogg(filename: str, cfg: Config):
     _m = _v.media_new(filename)
     _p.set_media(_m)
     _p.play()
+
+
+def get_input_devices() -> dict:
+    """Retrieve the list of viable recording devices"""
+    pyaudio = PyAudio()
+    devices = []
+
+    count = pyaudio.get_device_count()
+    print(f"Checking {count} devices...")
+    for idx in range(count):
+        dev = pyaudio.get_device_info_by_index(idx)
+        print(f"Checking device: {dev['index']} - {dev['name']}")
+        if __is_valid_input(dev):
+            # dev['index'] = idx
+            print(f"adding device: {dev['index']} - {dev['name']}")
+            devices.append(dev)
+
+    pyaudio.terminate()
+
+    return devices

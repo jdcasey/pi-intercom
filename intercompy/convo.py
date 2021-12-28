@@ -13,7 +13,7 @@ from telegram.ext import (
     Filters, Dispatcher,
 )
 
-from intercompy.audio import record_ogg, playback_ogg
+from intercompy.audio import record_ogg, playback_ogg, get_input_devices
 from intercompy.config import Config
 
 logging.basicConfig(
@@ -85,13 +85,13 @@ def lsaudio(update: Update, context: CallbackContext, cfg: Config):
             msg = "\n".join([f"{k}={v}" for (k, v) in info.items()])
 
     else:
+
         lines = []
-        for idx in range(pyaudio.get_device_count()):
-            dev = pyaudio.get_device_info_by_index(idx)
+        for dev in get_input_devices():
             lines.append(
-                f"{idx}. {dev.get('name')} (input channels: {dev.get('maxInputChannels')})"
+                f"{dev.get('index')}. {dev.get('name')} "
+                f"(input channels: {dev.get('maxInputChannels')})"
             )
-            dev = None
 
         msg = "\n".join(lines)
         # definfo = "\n".join(
