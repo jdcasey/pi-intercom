@@ -2,10 +2,12 @@ import os
 from ruamel.yaml import YAML
 
 
-ETC_CONFIG_FILE = '/etc/piwalkie/config.yaml'
-HOME_CONFIG_FILE = os.path.join(os.environ.get('HOME'), '.config/piwalkie/config.yaml')
-TOKEN = 'token'
-CHAT = 'chat'
+ETC_CONFIG_FILE = "/etc/intercompy/config.yaml"
+HOME_CONFIG_FILE = os.path.join(
+    os.environ.get("HOME"), ".config/intercompy/config.yaml"
+)
+TOKEN = "token"
+CHAT = "chat"
 
 
 # TODO: Make these configurable!!
@@ -13,14 +15,16 @@ CHAT = 'chat'
 WAV_THRESHOLD = 500
 
 
-def load(config_file=None):
+def load(config_file: str = None):
     config_path = config_file or HOME_CONFIG_FILE
     if os.path.exists(config_path) is not True:
         config_path = ETC_CONFIG_FILE
 
     if os.path.exists(config_path) is not True:
-        raise Exception(f"No configuration defined for piwalkie in {config_file} or {HOME_CONFIG_FILE} or "
-                        f"{ETC_CONFIG_FILE}")
+        raise Exception(
+            f"No configuration defined for intercompy in {config_file} or {HOME_CONFIG_FILE} or "
+            f"{ETC_CONFIG_FILE}"
+        )
 
     with open(config_path) as f:
         data = YAML().load(f)

@@ -2,39 +2,34 @@ import logging
 from pyaudio import PyAudio
 import tempfile
 from time import sleep
-from datetime import datetime as dt
 import os
 
-import piwalkie.audio as audio
-import piwalkie.video as video
-from piwalkie.config import Config
+import intercompy.audio as audio
+from intercompy.config import Config
 
-from telegram import (
-    Bot,
-    Update,
-    ParseMode
-)
+from telegram import Bot, Update
 from telegram.ext import (
     Updater,
     CommandHandler,
     MessageHandler,
     CallbackContext,
-    Filters
+    Filters, Dispatcher,
 )
 
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
 
 logger = logging.getLogger(__name__)
 
 
-def set_commands(cfg, bot):
-    my_commands = [(k,helptxt) for (k,_,helptxt) in COMMANDS]
+def set_commands(cfg: Config, bot: Bot):
+    my_commands = [(k, helptxt) for (k, _, helptxt) in COMMANDS]
     bot.set_my_commands(my_commands)
 
 
-def hello(cfg):
+def hello(cfg: Config) -> Bot:
     bot = Bot(cfg.token)
     me = bot.get_me()
     logger.info("Sending hello to {c}".format(c=cfg.chat))
@@ -43,7 +38,7 @@ def hello(cfg):
     return bot
 
 
-def goodbye(cfg, sig, frame):
+def goodbye(cfg: Config, sig, frame):
     bot = Bot(cfg.token)
     me = bot.get_me()
     logger.info("Sending goodbye to {c}".format(c=cfg.chat))
@@ -52,12 +47,14 @@ def goodbye(cfg, sig, frame):
 
 def show_help(update: Update, context: CallbackContext, cfg: Config):
     # logger.info("sending help message")
-    my_commands = [f"/{k} - {helptxt}" for (k,_,helptxt) in COMMANDS]
+    my_commands = [f"/{k} - {helptxt}" for (k, _, helptxt) in COMMANDS]
     update.message.reply_text("\n".join(my_commands))
 
 
 def chatinfo(update: Update, context: CallbackContext, cfg: Config):
-    msg = f"User: {update.effective_user.full_name} is in chat: {update.message.chat_id}"
+    msg = (
+        f"User: {update.effective_user.full_name} is in chat: {update.message.chat_id}"
+    )
     logger.info(msg)
     update.message.reply_text(msg)
 
@@ -68,7 +65,7 @@ def lsaudio(update: Update, context: CallbackContext, cfg: Config):
     if context.args is not None and len(context.args) > 0:
         idxarg = context.args[0]
         info = None
-        if 'default' == idxarg:
+        if "default" == idxarg:
             info = p.get_default_input_device_info()
         else:
             idx = int(idxarg)
@@ -77,13 +74,15 @@ def lsaudio(update: Update, context: CallbackContext, cfg: Config):
         if info is None:
             msg = f"No audio device found for: {idxarg}"
         else:
-            msg = "\n".join([f"{k}={v}" for (k,v) in info.items()])
+            msg = "\n".join([f"{k}={v}" for (k, v) in info.items()])
 
     else:
         lines = []
         for idx in range(p.get_device_count()):
             dev = p.get_device_info_by_index(idx)
-            lines.append(f"{idx}. {dev.get('name')} (input channels: {dev.get('maxInputChannels')})")
+            lines.append(
+                f"{idx}. {dev.get('name')} (input channels: {dev.get('maxInputChannels')})"
+            )
             dev = None
 
         msg = "\n".join(lines)
@@ -97,39 +96,29 @@ def lsaudio(update: Update, context: CallbackContext, cfg: Config):
 def audiograb(update: Update, context: CallbackContext, cfg: Config):
     # print("Grabbing current audio sample...")
     outfile = audio.record_ogg(cfg)
-    with open(outfile, 'rb') as f:
+    with open(outfile, "rb") as f:
         update.message.reply_voice(voice=f)
     os.remove(outfile)
 
 
-def imgrab(update: Update, context: CallbackContext, cfg: Config):
-    logger.info("Grabbing PNG")
-    imgfile = video.capture_png(cfg)
-    with open(imgfile, 'rb') as f:
-        update.message.reply_photo(photo=f, caption=f"Image captured at {str(dt.now())}")
-    os.remove(imgfile)
-
-
-def gifgrab(update: Update, context: CallbackContext, cfg: Config):
-    logger.info("Grabbing Animated GIF")
-    imgfile = video.capture_gif(cfg)
-    with open(imgfile, 'rb') as f:
-        update.message.reply_document(f, filename=os.path.basename(imgfile), caption=f"GIF captured at {str(dt.now())}")
-    os.remove(imgfile)
-
-
 def converse(update: Update, context: CallbackContext, cfg: Config):
-    print(f"RECV: {update.message}\n\ndocument: {update.message.document}\n\nphoto: {update.message.photo}\n\nvideo: "
-          f"{update.message.video}\n\nvideo note: {update.message.video_note}\n\nvoice: {update.message.voice}\n\n"
-          f"location: {update.message.location}")
-    if update.message.text is not None and "who's online?" in update.message.text.lower():
+    print(
+        f"RECV: {update.message}\n\ndocument: {update.message.document}\n\nvoice: {update.message.voice}\n\n"
+        f"location: {update.message.location}"
+    )
+    if (
+        update.message.text is not None
+        and "who's online?" in update.message.text.lower()
+    ):
         update.message.reply_text("I'm online")
     elif update.message.voice is not None:
         fid = update.message.voice.get_file()
-        fext = update.message.voice.mime_type.split('/')[-1]
+        fext = update.message.voice.mime_type.split("/")[-1]
 
         infile = None
-        with tempfile.NamedTemporaryFile('wb', prefix='walkie.', suffix='.'+fext, delete=False) as temp:
+        with tempfile.NamedTemporaryFile(
+            "wb", prefix="intercom.", suffix="." + fext, delete=False
+        ) as temp:
             temp.write(fid.download_as_bytearray())
             temp.flush()
             infile = temp.name
@@ -141,7 +130,7 @@ def converse(update: Update, context: CallbackContext, cfg: Config):
         sleep(5)
         print("RECORD YOUR RESPONSE....")
         outfile = audio.record_ogg(cfg)
-        with open(outfile, 'rb') as f:
+        with open(outfile, "rb") as f:
             update.message.reply_voice(voice=f)
         os.remove(outfile)
 
@@ -151,23 +140,29 @@ def converse(update: Update, context: CallbackContext, cfg: Config):
         update.message.reply_text("Got it. Thanks")
 
 
-def add_command(dispatcher, cmdinfo, cfg):
+def add_command(dispatcher: Dispatcher, cmdinfo: list, cfg: Config):
     key, cmd, _ = cmdinfo
     # print(f"{key} maps to {cmd}")
-    dispatcher.add_handler(CommandHandler(key, lambda u,cx: cmd(u,cx,cfg)))
+    dispatcher.add_handler(CommandHandler(key, lambda u, cx: cmd(u, cx, cfg)))
 
 
-def start(cfg):
+def start(cfg: Config):
     bot = hello(cfg)
     set_commands(cfg, bot)
 
-    updater = Updater(cfg.token, use_context=True, user_sig_handler=lambda sig,frame: goodbye(cfg, sig, frame))
+    updater = Updater(
+        cfg.token,
+        use_context=True,
+        user_sig_handler=lambda sig, frame: goodbye(cfg, sig, frame),
+    )
     dispatcher = updater.dispatcher
 
     for cmd in COMMANDS:
         add_command(dispatcher, cmd, cfg)
 
-    dispatcher.add_handler(MessageHandler(Filters.all, lambda u, cx: converse(u, cx, cfg)))
+    dispatcher.add_handler(
+        MessageHandler(Filters.all, lambda u, cx: converse(u, cx, cfg))
+    )
 
     updater.start_polling()
     updater.idle()
@@ -179,12 +174,13 @@ def print_help():
 
 
 COMMANDS = [
-    ('help', show_help, 'Show this help'),
-    ('chatinfo', chatinfo, 'Display information about this chat'),
-    ('lsaudio', lsaudio, "[idx] (Optional)\n\t\t\tList audio device information from bot host.\n\t\t\t"
-                         "With index param, show details."),
-    ('audiograb', audiograb, 'Record some audio on the bot host and send it back'),
-    ('imgrab', imgrab, 'Capture an image from the camera and send it back'),
-    ('gifgrab', gifgrab, 'Capture an animated gif from the camera and send it back'),
+    ("help", show_help, "Show this help"),
+    ("chatinfo", chatinfo, "Display information about this chat"),
+    (
+        "lsaudio",
+        lsaudio,
+        "[idx] (Optional)\n\t\t\tList audio device information from bot host.\n\t\t\t"
+        "With index param, show details.",
+    ),
+    ("audiograb", audiograb, "Record some audio on the bot host and send it back"),
 ]
-

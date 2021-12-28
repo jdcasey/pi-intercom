@@ -4,9 +4,9 @@ from setuptools import setup, find_packages
 
 setup(
     zip_safe=True,
-    name='piwalkie',
+    name='intercompy',
     version='0.0.1',
-    long_description="Turn a Raspberry Pi into a walkie talkie with Telegram",
+    long_description="Turn a Raspberry Pi into an intercom with Telegram",
     classifiers=[
       "Development Status :: 3 - Alpha",
       "Intended Audience :: Developers",
@@ -16,7 +16,7 @@ setup(
     keywords='telegram rpi raspberry-pi',
     author='John Casey',
     author_email='jdcasey@commonjava.org',
-    url='https://github.com/jdcasey/piwalkie',
+    url='https://github.com/jdcasey/pi-intercom',
     license='GPLv3+',
     packages=find_packages(exclude=['ez_setup', 'examples', 'tests']),
     install_requires=[
@@ -26,16 +26,12 @@ setup(
       "pyaudio",
       'python-vlc',
       'ffmpy',
-      'opencv-python',
-      'imageio',
-      'imutils',
-      'pygifsicle'
     ],
     include_package_data=True,
     test_suite="tests",
     entry_points={
       'console_scripts': [
-        'walkie = piwalkie:bot'
+        'intercom = intercompy:run'
       ],
     }
 )

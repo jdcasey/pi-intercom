@@ -1,4 +1,4 @@
-# Python Telegram bot that can record/send audio, PNG images, and animated GIFs
+# Python Telegram bot that can record/send audio, for use in Raspberry Pi-driven Intercoms
 
 ## Non-PyPI Dependencies
 
@@ -19,7 +19,7 @@ $ pip install -e .
 
 Before you do anything, you'll need a Telegram bot. You can get a bot account by chatting with BotFather using a Telegram app. Check out the help for that bot in order to set this up.
 
-In either `/etc/piwalkie/config.yaml` or `$HOME/.config/piwalkie/config.yaml`, you should create an initial config with just the bot's token:
+In either `/etc/intercompy/config.yaml` or `$HOME/.config/intercompy/config.yaml`, you should create an initial config with just the bot's token:
 
 ```yaml
 token: 82452345:aslkdjq1049543rsdflkj409tu
@@ -32,12 +32,12 @@ token: 82452345:aslkdjq1049543rsdflkj409tu
 chat: 232434254
 ```
 
-**NOTE:** Consider keeping this group small, since it could have security implications for wherever you mount your bot's camera / microphone!
+**NOTE:** Consider keeping this group small, since it could have security implications for wherever you mount your bot's microphone!
 
 ## Start
 
 ```bash
-$ walkie
+$ intercom
 ```
 
 **TODO:** I still need to create a systemd startup script for this service.
