@@ -1,0 +1,32 @@
+- hosts: intercoms
+  remote_user: pi
+  become: true
+
+  tasks:
+    - name: install packages
+      apt:
+        name: '{{ packages }}'
+        state: present
+      vars:
+        packages:
+          - python3-pip
+          - python3-setuptools
+          - python3-wheel
+          - python3-venv
+          - build-essential
+
+    - name: copy files
+      ansible.builtin.copy:
+        src: "{{playbook_dir}}/.."
+        dest: /home/pi/intercom
+        owner: pi
+        group: pi
+        mode: '0644'
+        directory_mode: '0755'
+
+    - name: setup venv
+      ansible.builtin.pip:
+        chdir: /home/pi/intercom
+        virtualenv: /home/pi/intercom/venv
+        virtualenv_site_packages: yes
+        virtualenv_command: "/usr/bin/python3 -m venv"

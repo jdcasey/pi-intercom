@@ -70,37 +70,45 @@ def lsaudio(update: Update, context: CallbackContext, cfg: Config):
     """List the available audio devices to Telegram"""
     # print(f"RECV params: {update.message.text} and args: {str(context.args)}")
     pyaudio = PyAudio()
-    if context.args is not None and len(context.args) > 0:
-        idxarg = context.args[0]
-        info = None
-        if "default" == idxarg:
-            info = pyaudio.get_default_input_device_info()
+    try:
+        if context.args is not None and len(context.args) > 0:
+            idxarg = context.args[0]
+            info = None
+            if "default" == idxarg:
+                info = pyaudio.get_default_input_device_info()
+            else:
+                idx = int(idxarg)
+                info = pyaudio.get_device_info_by_index(idx)
+
+            if info is None:
+                msg = f"No audio device found for: {idxarg}"
+            else:
+                msg = "\n".join([f"{k}={v}" for (k, v) in info.items()])
+
         else:
-            idx = int(idxarg)
-            info = pyaudio.get_device_info_by_index(idx)
+            devices = get_input_devices(pyaudio)
+            if len(devices) > 0:
+                lines = []
+                for dev in devices:
+                    lines.append(
+                        f"{dev.get('index')}. {dev.get('name')} "
+                        f"(input channels: {dev.get('maxInputChannels')})"
+                    )
 
-        if info is None:
-            msg = f"No audio device found for: {idxarg}"
-        else:
-            msg = "\n".join([f"{k}={v}" for (k, v) in info.items()])
+                msg = "\n".join(lines)
 
-    else:
+            else:
+                msg = "No valid audio input devices found!"
 
-        lines = []
-        for dev in get_input_devices():
-            lines.append(
-                f"{dev.get('index')}. {dev.get('name')} "
-                f"(input channels: {dev.get('maxInputChannels')})"
-            )
+            # definfo = "\n".join(
+            #   [f"{k}={v}" for (k,v) in pyaudio.get_default_input_device_info().items()]
+            # )
+            # msg = "\n".join(lines) + "\n\nDefault input device:\n" + definfo
 
-        msg = "\n".join(lines)
-        # definfo = "\n".join(
-        #   [f"{k}={v}" for (k,v) in pyaudio.get_default_input_device_info().items()]
-        # )
-        # msg = "\n".join(lines) + "\n\nDefault input device:\n" + definfo
-
-    logger.debug("Sending message: \"%s\" to: %s in chat: %s", msg, context.user_data, cfg.chat)
-    update.message.reply_text(msg)
+        logger.debug("Sending message: \"%s\" to: %s in chat: %s", msg, context.user_data, cfg.chat)
+        update.message.reply_text(msg)
+    finally:
+        pyaudio.terminate()
 
 
 def audiograb(update: Update, context: CallbackContext, cfg: Config):
@@ -197,7 +205,7 @@ def print_help():
     """Print available Telegram commands to the console."""
 
     my_commands = [f"{k} - {helptxt}" for (k, _, helptxt) in COMMANDS]
-    print("The following commands are available:\n\n" + "\n".join(my_commands) + "\n\n")
+    logger.info("The following commands are available:\n\n" + "\n".join(my_commands) + "\n\n")
 
 
 COMMANDS = [
