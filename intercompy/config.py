@@ -1,5 +1,7 @@
 """Handle configuration for intercompy bot"""
 import os
+import logging
+
 from ruamel.yaml import YAML
 
 
@@ -10,11 +12,13 @@ HOME_CONFIG_FILE = os.path.join(
 TOKEN = "token"
 CHAT = "chat"
 WAV_THRESHOLD = "wav-threshold"
+WAV_SILENCE_THRESHOLD = "wav-silence-threshold"
 VOLUME = "playback-volume"
 AUDIO_DEVICE = "audio-device"
 
 DEFAULT_VOLUME = 75
 DEFAULT_WAV_THRESHOLD = 500
+DEFAULT_WAV_SILENCE_THRESHOLD = 30
 
 
 def load(config_file: str = None):
@@ -48,16 +52,19 @@ class Config:
         self.token = data.get(TOKEN)
         self.chat = data.get(CHAT)
         self.wav_threshold = data.get(WAV_THRESHOLD) or DEFAULT_WAV_THRESHOLD
+        self.wav_silence_threshold = data.get(WAV_SILENCE_THRESHOLD) or \
+                                     DEFAULT_WAV_SILENCE_THRESHOLD
         self.volume = data.get(VOLUME) or DEFAULT_VOLUME
-        self.audio_device_index = data.get(AUDIO_DEVICE)
+        self.audio_device = data.get(AUDIO_DEVICE)
 
     def print(self):
         """Print a diagnostic message containing this configuration"""
-        print(f"Token: {self.token}"
-              f"\nChat: {self.chat}"
-              f"\nWAV Threshold:{self.wav_threshold}"
-              f"\nPlayback volume: {self.volume}"
-              f"\nAudio device index: {self.audio_device_index}")
+        logging.info("Token: %(token)s"
+              "\nChat: %(chat)s"
+              "\nWAV Threshold: %(wav_threshold)s"
+              "\nWAV Silence Threshold: %(wav_silence_threshold)s"
+              "\nPlayback volume: %(volume)s"
+              "\nAudio device: %(audio_device_index)s", self)
 
     def dump(self, stream):
         """Dump the config as YAML to the specified stream"""
@@ -65,6 +72,7 @@ class Config:
             TOKEN: self.token,
             CHAT: self.chat,
             WAV_THRESHOLD: self.wav_threshold,
+            WAV_SILENCE_THRESHOLD: self.wav_silence_threshold,
             VOLUME: self.volume,
-            AUDIO_DEVICE: self.audio_device_index,
+            AUDIO_DEVICE: self.audio_device,
         }, stream)

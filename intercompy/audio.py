@@ -1,6 +1,7 @@
 """
 Capture and play audio for use with Telegram. Uses ffmpeg for recording and vlc for playback.
 """
+import logging
 import os
 import wave
 from array import array
@@ -17,6 +18,8 @@ from intercompy.config import Config
 
 WAV_FORMAT = paInt16
 WAV_CHUNK_SIZE = 4096
+
+logger = logging.getLogger(__name__)
 
 # WAV recording logic is adapted from:
 # https://stackoverflow.com/questions/892199/detect-record-audio-in-python
@@ -57,7 +60,8 @@ def trim(snd_data: array, cfg: Config) -> array:
 def __is_valid_input(dev):
     """Determine whether the given audio device is suitable for recording voice."""
 
-    return int(dev.get("maxInputChannels")) > 0
+    in_channels = int(dev.get("maxInputChannels"))
+    return 0 < in_channels < 3
 
 
 def detect_input(pyaudio: PyAudio, cfg: Config) -> dict:
@@ -65,25 +69,35 @@ def detect_input(pyaudio: PyAudio, cfg: Config) -> dict:
     Find the audio input device
     """
 
-    device_index = cfg.audio_device_index
-    input_info = None
+    device = cfg.audio_device
+    device_name = None
+    device_index = None
+    if isinstance(device) == str:
+        device_name = device
+    else:
+        device_index = device
 
-    if device_index is None:
-        input_info = pyaudio.get_default_input_device_info()
+    input_info = pyaudio.get_default_input_device_info()
+    device_count = pyaudio.get_device_count()
+
+    if input_info is None and device_index is not None and device_index < device_count-1:
+        dev = pyaudio.get_device_info_by_index(int(device_index))
+        if __is_valid_input(dev):
+            input_info = dev
+        else:
+            logger.error("Configured input device %s is INVALID! Info:\n\n%s", device_index, dev)
 
     if input_info is None:
-        pyaudio = PyAudio()
-        device_count = pyaudio.get_device_count()
-        if device_index is not None and device_index < device_count-1:
-            dev = pyaudio.get_device_info_by_index(int(device_index))
+        logger.info("Selecting a candidate input device from the list...")
+        for idx in range(device_count):
+            dev = pyaudio.get_device_info_by_index(idx)
             if __is_valid_input(dev):
-                input_info = dev
-        else:
-            for idx in range(device_count):
-                dev = pyaudio.get_device_info_by_index(idx)
-                if __is_valid_input(dev):
+                if device_name is None or dev['name'] == device_name:
                     input_info = dev
                     break
+
+    if input_info is None:
+        logger.error("No valid input devices found!")
 
     return input_info
 
@@ -122,20 +136,36 @@ def record_wav(pyaudio: PyAudio, input_info: dict, cfg: Config, channels: int = 
 
         silent = is_silent(snd_data, cfg)
 
-        if silent and snd_started:
-            num_silent += 1
-        elif not silent and not snd_started:
-            snd_started = True
+        if silent:
+            logger.debug(
+                "Silence detected. Number of contiguous, silent samples so far: %s",
+                num_silent
+            )
+            if snd_started:
+                logger.debug("Silent++")
+                num_silent += 1
+        else:
+            logger.debug("Sound detected")
+            if not snd_started:
+                logger.debug("Sound started")
+                snd_started = True
+            else:
+                # We're resetting here, since we want to count CONSECUTIVE silent samples
+                num_silent = 0
 
-        if snd_started and num_silent > 30:
+        if snd_started and num_silent > cfg.wav_silence_threshold:
+            logger.debug("Got the recording. Formatting / returning")
             break
 
     sample_width = pyaudio.get_sample_size(WAV_FORMAT)
+    logger.debug("Got sample width")
     stream.stop_stream()
+    logger.debug("stream stopped")
     stream.close()
-    pyaudio.terminate()
+    logger.debug("stream closed")
 
     _r = trim(_r, cfg)
+    logger.debug("audio sample has been trimmed")
     return sample_width, _r
 
 
@@ -153,25 +183,31 @@ def record_ogg(oggfile: NamedTemporaryFile, cfg: Config) -> str:
     """
 
     pyaudio = PyAudio()
-    input_info = detect_input(pyaudio, cfg)
-    channels = min(int(input_info.get("maxInputChannels")), 4)
+    try:
+        input_info = detect_input(pyaudio, cfg)
+        if input_info is None:
+            raise Exception("Cannot find valid input!")
+        channels = min(int(input_info.get("maxInputChannels")), 4)
 
-    sample_width, data = record_wav(pyaudio, input_info, cfg, channels)
-    data = pack("<" + ("h" * len(data)), *data)
+        sample_width, data = record_wav(pyaudio, input_info, cfg, channels)
+        data = pack("<" + ("h" * len(data)), *data)
 
-    with NamedTemporaryFile(
-        "wb", prefix="intercom.recording.", suffix=".wav", delete=False
-    ) as wavfile:
+        with NamedTemporaryFile(
+            "wb", prefix="intercom.recording.", suffix=".wav", delete=False
+        ) as wavfile:
 
-        with wave.open(wavfile.name, mode="wb") as _wf:
-            __write_wav(input_info, channels, sample_width, data, _wf)
+            with wave.open(wavfile.name, mode="wb") as _wf:
+                __write_wav(input_info, channels, sample_width, data, _wf)
 
-        ffmpeg = ffmpy.FFmpeg(
-            inputs={wavfile.name: None}, outputs={oggfile.name: ["-y", "-f", "ogg"]}
-        )
-        ffmpeg.run()
+            ffmpeg = ffmpy.FFmpeg(
+                inputs={wavfile.name: None}, outputs={oggfile.name: ["-y", "-f", "ogg"]}
+            )
+            ffmpeg.run()
 
-    os.remove(wavfile.name)
+        os.remove(wavfile.name)
+    finally:
+        pyaudio.terminate()
+        print("pyaudio terminated")
 
 
 def playback_ogg(filename: str, cfg: Config):
@@ -184,3 +220,20 @@ def playback_ogg(filename: str, cfg: Config):
     _m = _v.media_new(filename)
     _p.set_media(_m)
     _p.play()
+
+
+def get_input_devices(pyaudio: PyAudio) -> dict:
+    """Retrieve the list of viable recording devices"""
+    devices = []
+
+    count = pyaudio.get_device_count()
+    logger.debug("Checking %s devices...", count)
+    for idx in range(count):
+        dev = pyaudio.get_device_info_by_index(idx)
+        logger.debug("Checking device: %(index)s - %(name)s", dev)
+        if __is_valid_input(dev):
+            # dev['index'] = idx
+            logger.debug("adding device: %(index)s - %(name)s", dev)
+            devices.append(dev)
+
+    return devices
