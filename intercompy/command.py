@@ -10,6 +10,7 @@ from pyrogram import Client
 from intercompy.audio import record_ogg
 from intercompy.config import load, Config
 from intercompy.convo import start_telegram, setup_telegram, send_voice
+from intercompy.gpio import init as gpio_init
 
 
 async def has_edge():
@@ -37,10 +38,10 @@ async def listen_for_buttons(client: Client, cfg: Config):
                         "wb", prefix="intercom.voice-out.", suffix=".ogg", delete=False
                 ) as oggfile:
                     print("Recording voice.")
-                    await record_ogg(oggfile, cfg, has_edge)
+                    await record_ogg(oggfile, cfg.audio, has_edge)
 
                 print("Sending voice")
-                await send_voice(oggfile, client, cfg)
+                await send_voice(oggfile, client, cfg.telegram.chat)
 
             await sleep(0.01)
         else:
@@ -61,7 +62,10 @@ def run(config_file: str = None, debug: bool = False):
     )
 
     cfg = load(config_file)
+
     app = setup_telegram(cfg)
+    gpio_init(cfg.gpio)
+
     gather(
         start_telegram(app, cfg),
         listen_for_buttons(app, cfg),

@@ -14,7 +14,7 @@ import ffmpy
 import vlc
 from pyaudio import PyAudio, paInt16
 
-from intercompy.config import Config
+from intercompy.config import Audio
 
 WAV_FORMAT = paInt16
 WAV_CHUNK_SIZE = 4096
@@ -25,16 +25,16 @@ logger = logging.getLogger(__name__)
 # https://stackoverflow.com/questions/892199/detect-record-audio-in-python
 
 
-def is_silent(snd_data: array, cfg: Config) -> bool:
+def is_silent(snd_data: array, cfg: Audio) -> bool:
     "Returns 'True' if below the 'silent' threshold"
     return max(snd_data) < cfg.wav_threshold
 
 
-def trim(snd_data: array, cfg: Config) -> array:
+def trim(snd_data: array, cfg: Audio) -> array:
     """Trim the blank spots at the start and end
     """
 
-    def _trim(_sd: array, _c: Config) -> array:
+    def _trim(_sd: array, _c: Audio) -> array:
         snd_started = False
         _r = array("h")
 
@@ -64,7 +64,7 @@ def __is_valid_input(dev):
     return 0 < in_channels < 3
 
 
-def detect_input(pyaudio: PyAudio, cfg: Config) -> dict:
+def detect_input(pyaudio: PyAudio, cfg: Audio) -> dict:
     """
     Find the audio input device
     """
@@ -102,7 +102,7 @@ def detect_input(pyaudio: PyAudio, cfg: Config) -> dict:
     return input_info
 
 
-async def record_wav(pyaudio: PyAudio, input_info: dict, cfg: Config, channels: int, stop_fn=None) \
+async def record_wav(pyaudio: PyAudio, input_info: dict, cfg: Audio, channels: int, stop_fn=None) \
         -> Tuple[int, array]:
     """
     Record a word or words from the microphone and
@@ -175,7 +175,7 @@ async def record_wav(pyaudio: PyAudio, input_info: dict, cfg: Config, channels: 
     return sample_width, _r
 
 
-def __write_wav(input_info: dict, channels: int, sample_width: int, data: array,
+def __write_wav(input_info: dict, channels: int, sample_width: int, data: bytes,
                 _wf: wave.Wave_write):
     """Take input from device recording (in memory) and write it to a WAV file"""
     _wf.setnchannels(channels)
@@ -184,7 +184,7 @@ def __write_wav(input_info: dict, channels: int, sample_width: int, data: array,
     _wf.writeframes(data)
 
 
-async def record_ogg(oggfile: NamedTemporaryFile, cfg: Config, stop_fn=None) -> str:
+async def record_ogg(oggfile: NamedTemporaryFile, cfg: Audio, stop_fn=None):
     """Records from the microphone and outputs the resulting data to 'path'
     """
 
@@ -216,7 +216,7 @@ async def record_ogg(oggfile: NamedTemporaryFile, cfg: Config, stop_fn=None) -> 
         print("pyaudio terminated")
 
 
-def playback_ogg(filename: str, cfg: Config):
+def playback_ogg(filename: str, cfg: Audio):
     """ Play a .ogg file using VLC
     """
     _v = vlc.Instance("--aout=alsa")

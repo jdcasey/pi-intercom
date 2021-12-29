@@ -9,15 +9,20 @@ ETC_CONFIG_FILE = "/etc/intercompy/config.yaml"
 HOME_CONFIG_FILE = os.path.join(
     os.environ.get("HOME"), ".config/intercompy/config.yaml"
 )
-SESSION = "telegram-session"
-API_HASH = "telegram-api-hash"
-API_ID = "telegram-api-id"
-CHAT = "telegram-chat"
+
+TELEGRAM_SECTION = "telegram"
+
+SESSION = "session"
+API_HASH = "api-hash"
+API_ID = "api-id"
+CHAT = "chat"
+
+AUDIO_SECTION = "audio"
 
 WAV_THRESHOLD = "wav-threshold"
 WAV_SILENCE_THRESHOLD = "wav-silence-threshold"
 VOLUME = "playback-volume"
-AUDIO_DEVICE = "audio-device"
+AUDIO_DEVICE = "device"
 
 DEFAULT_VOLUME = 75
 DEFAULT_WAV_THRESHOLD = 500
@@ -48,16 +53,19 @@ def load(config_file: str = None):
     return Config(data)
 
 
-class Config:
-    """Contain the configuration parameters for intercompy
-    """
+class GPIO:
+    """Contain config mappings of GPIO pins to chat / user for sending recordings"""
+    def __init__(self, data: dict):
+        pin_map = {}
+        for pin,target in dict.items():
+            if isinstance(pin, int):
+                pin_map[pin] = target
 
-    # pylint: disable=too-many-instance-attributes
-    def __init__(self, data):
-        self.api_hash = data.get(API_HASH)
-        self.api_id = data.get(API_ID)
-        self.session = data.get(SESSION)
-        self.chat = data.get(CHAT)
+        self.pins = pin_map
+
+class Audio:
+    """Contain config options for audio input / output"""
+    def __init__(self, data: dict):
         self.wav_threshold = data.get(WAV_THRESHOLD) or DEFAULT_WAV_THRESHOLD
         self.wav_silence_threshold = data.get(WAV_SILENCE_THRESHOLD) or \
                                      DEFAULT_WAV_SILENCE_THRESHOLD
@@ -65,23 +73,20 @@ class Config:
         self.volume = data.get(VOLUME) or DEFAULT_VOLUME
         self.audio_device = data.get(AUDIO_DEVICE)
 
-    def print(self):
-        """Print a diagnostic message containing this configuration"""
-        logging.info("Chat: %(chat)s"
-                     "\nWAV Threshold: %(wav_threshold)s"
-                     "\nWAV Silence Threshold: %(wav_silence_threshold)s"
-                     "\nPlayback volume: %(volume)s"
-                     "\nAudio device: %(audio_device_index)s", self)
 
-    def dump(self, stream):
-        """Dump the config as YAML to the specified stream"""
-        YAML().dump({
-            SESSION: self.session,
-            API_HASH: self.api_hash,
-            API_ID: self.api_id,
-            CHAT: self.chat,
-            WAV_THRESHOLD: self.wav_threshold,
-            WAV_SILENCE_THRESHOLD: self.wav_silence_threshold,
-            VOLUME: self.volume,
-            AUDIO_DEVICE: self.audio_device,
-        }, stream)
+class Telegram:
+    """Contain configuration options for Telegram client"""
+    def __init__(self, data: dict):
+        self.api_hash = data.get(API_HASH)
+        self.api_id = data.get(API_ID)
+        self.session = data.get(SESSION)
+        self.chat = data.get(CHAT)
+
+
+class Config:
+    """Contain the configuration parameters for intercompy
+    """
+    # pylint: disable=too-many-instance-attributes
+    def __init__(self, data: dict):
+        self.telegram = Telegram(data.get(TELEGRAM_SECTION))
+        self.audio = Audio(data.get(AUDIO_SECTION))
