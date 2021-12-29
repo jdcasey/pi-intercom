@@ -72,7 +72,7 @@ def detect_input(pyaudio: PyAudio, cfg: Config) -> dict:
     device = cfg.audio_device
     device_name = None
     device_index = None
-    if isinstance(device) == str:
+    if isinstance(device, str):
         device_name = device
     else:
         device_index = device
@@ -102,7 +102,7 @@ def detect_input(pyaudio: PyAudio, cfg: Config) -> dict:
     return input_info
 
 
-def record_wav(pyaudio: PyAudio, input_info: dict, cfg: Config, channels: int = 1) \
+async def record_wav(pyaudio: PyAudio, input_info: dict, cfg: Config, channels: int, stop_fn=None) \
         -> Tuple[int, array]:
     """
     Record a word or words from the microphone and
@@ -153,9 +153,15 @@ def record_wav(pyaudio: PyAudio, input_info: dict, cfg: Config, channels: int = 
                 # We're resetting here, since we want to count CONSECUTIVE silent samples
                 num_silent = 0
 
-        if snd_started and num_silent > cfg.wav_silence_threshold:
-            logger.debug("Got the recording. Formatting / returning")
-            break
+        if snd_started:
+            if stop_fn is not None:
+                print(f"Using stop function: {stop_fn}")
+                if await stop_fn():
+                    logger.debug("Got the recording. Formatting / returning")
+                    break
+            elif num_silent > cfg.wav_silence_threshold:
+                logger.debug("Got the recording. Formatting / returning")
+                break
 
     sample_width = pyaudio.get_sample_size(WAV_FORMAT)
     logger.debug("Got sample width")
@@ -178,7 +184,7 @@ def __write_wav(input_info: dict, channels: int, sample_width: int, data: array,
     _wf.writeframes(data)
 
 
-def record_ogg(oggfile: NamedTemporaryFile, cfg: Config) -> str:
+async def record_ogg(oggfile: NamedTemporaryFile, cfg: Config, stop_fn=None) -> str:
     """Records from the microphone and outputs the resulting data to 'path'
     """
 
@@ -189,7 +195,7 @@ def record_ogg(oggfile: NamedTemporaryFile, cfg: Config) -> str:
             raise Exception("Cannot find valid input!")
         channels = min(int(input_info.get("maxInputChannels")), 4)
 
-        sample_width, data = record_wav(pyaudio, input_info, cfg, channels)
+        sample_width, data = await record_wav(pyaudio, input_info, cfg, channels, stop_fn)
         data = pack("<" + ("h" * len(data)), *data)
 
         with NamedTemporaryFile(
