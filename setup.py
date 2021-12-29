@@ -20,6 +20,7 @@ setup(
     license='GPLv3+',
     packages=find_packages(exclude=['ez_setup', 'examples', 'tests']),
     install_requires=[
+      "pygame",
       "pyrogram",
       "tgcrypto",
       "ruamel.yaml",

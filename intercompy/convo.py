@@ -7,7 +7,7 @@ from pyrogram import Client
 from pyrogram.types import Message
 from pyrogram import filters
 
-from intercompy.audio import record_ogg, get_input_devices  #, playback_ogg
+from intercompy.audio import record_ogg, get_input_devices, playback_ogg
 from intercompy.config import Config
 
 
@@ -20,6 +20,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def send_voice(oggfile: str, app: Client, cfg: Config):
+    """Send a voice recording to the chat channel"""
+    with open(oggfile.name, "rb") as _f:
+        logging.debug("Sending voice message to: %s", cfg.chat)
+        await app.send_voice(cfg.chat, _f)
+
+
 async def goodbye(app: Client, cfg: Config, sig, frame):
     """Send a sign-off message to Telegram"""
     _me = await app.get_me()
@@ -27,55 +34,12 @@ async def goodbye(app: Client, cfg: Config, sig, frame):
     await app.send_message(cfg.chat, f"{_me.username} is offline 😴 (SIG={sig})")
 
 
-# def converse(update: Update, context: CallbackContext, cfg: Config):
-#     """Handle a complex user interaction involving multiple send/recv exchanges"""
-#     print(
-#         f"RECV: {update.message}"
-#         f"\n\nfrom: {context.user_data}"
-#         f"\n\ndocument: {update.message.document}"
-#         f"\n\nvoice: {update.message.voice}"
-#         f"\n\nlocation: {update.message.location}"
-#     )
-#     if (
-#         update.message.text is not None
-#         and "who's online?" in update.message.text.lower()
-#     ):
-#         update.message.reply_text("I'm online")
-#     elif update.message.voice is not None:
-#         fid = update.message.voice.get_file()
-#         fext = update.message.voice.mime_type.split("/")[-1]
-#
-#         with NamedTemporaryFile(
-#             "wb", prefix="intercom.", suffix="." + fext, delete=False
-#         ) as temp:
-#             temp.write(fid.download_as_bytearray())
-#             temp.flush()
-#             infile = temp.name
-#             print(f"Wrote: {infile}")
-#
-#             playback_ogg(temp.name, cfg)
-#
-#         sleep(1)
-#
-#         print("RECORD YOUR RESPONSE....")
-#         with NamedTemporaryFile(
-#                 "wb", prefix="intercom.voice-out.", suffix=".ogg", delete=False
-#         ) as oggfile:
-#
-#             record_ogg(oggfile, cfg)
-#             with open(oggfile.name, "rb") as _f:
-#                 update.message.reply_voice(voice=_f)
-#
-#         # update.message.reply_text(f"Saved voice note as: {fname}")
-#
-#     else:
-#         update.message.reply_text("Got it. Thanks")
-
-
 def setup_telegram(cfg: Config) -> Client:
+    """Setup the telegram client. This is just a convenience to provide a bit of encapsulation."""
     return Client(cfg.session, cfg.api_id, cfg.api_hash)
 
 
+# pylint: disable=too-many-statements
 async def start_telegram(app: Client, cfg: Config):
     """Setup / start the Telegram bot"""
 
@@ -86,7 +50,7 @@ async def start_telegram(app: Client, cfg: Config):
         with NamedTemporaryFile(
                 "wb", prefix="intercom.voice-out.", suffix=".ogg", delete=False
         ) as oggfile:
-            record_ogg(oggfile, cfg)
+            await record_ogg(oggfile, cfg)
             with open(oggfile.name, "rb") as _f:
                 logger.debug("Sending voice response to: %s", message.from_user.username)
                 await message.reply_voice(voice=_f)
@@ -169,6 +133,28 @@ async def start_telegram(app: Client, cfg: Config):
             await message.reply_text(msg)
         finally:
             pyaudio.terminate()
+
+    @app.on_message(filters=filters.voice)
+    async def play_message(_client: Client, message: Message):
+        """Play a received voice message"""
+        if message.voice is not None:
+            fext = message.voice.mime_type.split("/")[-1]
+
+            with NamedTemporaryFile(
+                "wb",
+                prefix="intercom." + message.voice.file_unique_id + ".",
+                suffix="." + fext,
+                delete=False
+            ) as temp:
+                fpath = await message.download(file_name=temp.name)
+                print(f"Downloaded to: {fpath}")
+
+                # temp.write(message.voice.waveform)
+                # temp.flush()
+                infile = temp.name
+                print(f"Wrote: {infile}")
+
+                playback_ogg(temp.name, cfg)
 
     await app.start()
     _me = await app.get_me()
