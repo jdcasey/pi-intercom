@@ -1,10 +1,11 @@
 """Command-line interface for intercompy"""
 import logging
+from asyncio import gather, get_event_loop
 
 import click
 
 from intercompy.config import load
-from intercompy.convo import print_help, start
+from intercompy.convo import start_telegram, setup_telegram
 
 
 @click.command()
@@ -21,5 +22,7 @@ def run(config_file: str = None, debug: bool = False):
     )
 
     cfg = load(config_file)
-    print_help()
-    start(cfg)
+    app = setup_telegram(cfg)
+    # app.run(start_telegram(app, cfg))
+    gather(start_telegram(app, cfg))
+    get_event_loop().run_forever()

@@ -1,20 +1,17 @@
 """Handle Telegram conversations started by others, or responses from others"""
 import logging
 from tempfile import NamedTemporaryFile
-from time import sleep
 
 from pyaudio import PyAudio
-from telegram import Bot, Update
-from telegram.ext import (
-    Updater,
-    CommandHandler,
-    MessageHandler,
-    CallbackContext,
-    Filters, Dispatcher,
-)
+from pyrogram import Client
+from pyrogram.types import Message
+from pyrogram import filters
 
-from intercompy.audio import record_ogg, playback_ogg, get_input_devices
+from intercompy.audio import record_ogg, get_input_devices  #, playback_ogg
 from intercompy.config import Config
+
+
+COMMAND_PREFIXES = ["!", "/"]
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -23,199 +20,157 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def set_commands(bot: Bot):
-    """Setup the standard Telegram command handlers for this bot"""
-    my_commands = [(k, helptxt) for (k, _, helptxt) in COMMANDS]
-    bot.set_my_commands(my_commands)
-
-
-def hello(cfg: Config) -> Bot:
-    """Start the Telegram bot and send a hello message"""
-    bot = Bot(cfg.token)
-    _me = bot.get_me()
-    logger.debug("Sending hello to %s", cfg.chat)
-    bot.send_message(cfg.chat, f"{_me.full_name} is online 🎉")
-
-    return bot
-
-
-def goodbye(cfg: Config, sig, frame):
+async def goodbye(app: Client, cfg: Config, sig, frame):
     """Send a sign-off message to Telegram"""
-    bot = Bot(cfg.token)
-    _me = bot.get_me()
+    _me = await app.get_me()
     logger.debug("Sending goodbye to %s in frame: %s", cfg.chat, frame)
-    bot.send_message(cfg.chat, f"{_me.full_name} is offline 😴 (SIG={sig})")
+    await app.send_message(cfg.chat, f"{_me.username} is offline 😴 (SIG={sig})")
 
 
-def show_help(update: Update, context: CallbackContext, cfg: Config):
-    """Print command help to Telegram"""
-    logger.debug("sending help message to: %s in chat: %s", context.user_data, cfg.chat)
-    my_commands = [f"/{k} - {helptxt}" for (k, _, helptxt) in COMMANDS]
-    update.message.reply_text("\n".join(my_commands))
+# def converse(update: Update, context: CallbackContext, cfg: Config):
+#     """Handle a complex user interaction involving multiple send/recv exchanges"""
+#     print(
+#         f"RECV: {update.message}"
+#         f"\n\nfrom: {context.user_data}"
+#         f"\n\ndocument: {update.message.document}"
+#         f"\n\nvoice: {update.message.voice}"
+#         f"\n\nlocation: {update.message.location}"
+#     )
+#     if (
+#         update.message.text is not None
+#         and "who's online?" in update.message.text.lower()
+#     ):
+#         update.message.reply_text("I'm online")
+#     elif update.message.voice is not None:
+#         fid = update.message.voice.get_file()
+#         fext = update.message.voice.mime_type.split("/")[-1]
+#
+#         with NamedTemporaryFile(
+#             "wb", prefix="intercom.", suffix="." + fext, delete=False
+#         ) as temp:
+#             temp.write(fid.download_as_bytearray())
+#             temp.flush()
+#             infile = temp.name
+#             print(f"Wrote: {infile}")
+#
+#             playback_ogg(temp.name, cfg)
+#
+#         sleep(1)
+#
+#         print("RECORD YOUR RESPONSE....")
+#         with NamedTemporaryFile(
+#                 "wb", prefix="intercom.voice-out.", suffix=".ogg", delete=False
+#         ) as oggfile:
+#
+#             record_ogg(oggfile, cfg)
+#             with open(oggfile.name, "rb") as _f:
+#                 update.message.reply_voice(voice=_f)
+#
+#         # update.message.reply_text(f"Saved voice note as: {fname}")
+#
+#     else:
+#         update.message.reply_text("Got it. Thanks")
 
 
-def chatinfo(update: Update, context: CallbackContext, cfg: Config):
-    """Send the metadata about the current chat to Telegram"""
-    msg = (
-        f"User: {update.effective_user.full_name} is in chat: {update.message.chat_id}"
-    )
-    logger.info(
-        "Sending chatinfo message: \"%s\" to: %s in chat: %s",
-        msg, context.user_data, cfg.chat
-    )
-    update.message.reply_text(msg)
+def setup_telegram(cfg: Config) -> Client:
+    return Client(cfg.session, cfg.api_id, cfg.api_hash)
 
 
-def lsaudio(update: Update, context: CallbackContext, cfg: Config):
-    """List the available audio devices to Telegram"""
-    # print(f"RECV params: {update.message.text} and args: {str(context.args)}")
-    pyaudio = PyAudio()
-    try:
-        if context.args is not None and len(context.args) > 0:
-            idxarg = context.args[0]
-            info = None
-            if "default" == idxarg:
-                info = pyaudio.get_default_input_device_info()
-            else:
-                idx = int(idxarg)
-                info = pyaudio.get_device_info_by_index(idx)
+async def start_telegram(app: Client, cfg: Config):
+    """Setup / start the Telegram bot"""
 
-            if info is None:
-                msg = f"No audio device found for: {idxarg}"
-            else:
-                msg = "\n".join([f"{k}={v}" for (k, v) in info.items()])
-
-        else:
-            devices = get_input_devices(pyaudio)
-            if len(devices) > 0:
-                lines = []
-                for dev in devices:
-                    lines.append(
-                        f"{dev.get('index')}. {dev.get('name')} "
-                        f"(input channels: {dev.get('maxInputChannels')})"
-                    )
-
-                msg = "\n".join(lines)
-
-            else:
-                msg = "No valid audio input devices found!"
-
-            # definfo = "\n".join(
-            #   [f"{k}={v}" for (k,v) in pyaudio.get_default_input_device_info().items()]
-            # )
-            # msg = "\n".join(lines) + "\n\nDefault input device:\n" + definfo
-
-        logger.debug("Sending message: \"%s\" to: %s in chat: %s", msg, context.user_data, cfg.chat)
-        update.message.reply_text(msg)
-    finally:
-        pyaudio.terminate()
-
-
-def audiograb(update: Update, context: CallbackContext, cfg: Config):
-    """Record and send voice over Telegram"""
-    # print("Grabbing current audio sample...")
-    with NamedTemporaryFile(
-        "wb", prefix="intercom.voice-out.", suffix=".ogg", delete=False
-    ) as oggfile:
-
-        record_ogg(oggfile, cfg)
-        with open(oggfile.name, "rb") as _f:
-            logger.debug("Sending voice response to: %s", context.user_data)
-            update.message.reply_voice(voice=_f)
-
-
-def converse(update: Update, context: CallbackContext, cfg: Config):
-    """Handle a complex user interaction involving multiple send/recv exchanges"""
-    print(
-        f"RECV: {update.message}"
-        f"\n\nfrom: {context.user_data}"
-        f"\n\ndocument: {update.message.document}"
-        f"\n\nvoice: {update.message.voice}"
-        f"\n\nlocation: {update.message.location}"
-    )
-    if (
-        update.message.text is not None
-        and "who's online?" in update.message.text.lower()
-    ):
-        update.message.reply_text("I'm online")
-    elif update.message.voice is not None:
-        fid = update.message.voice.get_file()
-        fext = update.message.voice.mime_type.split("/")[-1]
-
-        with NamedTemporaryFile(
-            "wb", prefix="intercom.", suffix="." + fext, delete=False
-        ) as temp:
-            temp.write(fid.download_as_bytearray())
-            temp.flush()
-            infile = temp.name
-            print(f"Wrote: {infile}")
-
-            playback_ogg(temp.name, cfg)
-
-        sleep(1)
-
-        print("RECORD YOUR RESPONSE....")
+    @app.on_message(filters=filters.command(commands="audiograb", prefixes=COMMAND_PREFIXES))
+    async def audiograb(_client: Client, message: Message):
+        """Record and send voice over Telegram"""
+        # print("Grabbing current audio sample...")
         with NamedTemporaryFile(
                 "wb", prefix="intercom.voice-out.", suffix=".ogg", delete=False
         ) as oggfile:
-
             record_ogg(oggfile, cfg)
             with open(oggfile.name, "rb") as _f:
-                update.message.reply_voice(voice=_f)
+                logger.debug("Sending voice response to: %s", message.from_user.username)
+                await message.reply_voice(voice=_f)
 
-        # update.message.reply_text(f"Saved voice note as: {fname}")
+    @app.on_message(filters=filters.command(commands="chatinfo", prefixes=COMMAND_PREFIXES))
+    async def chatinfo(_client: Client, message: Message):
+        """Send the metadata about the current chat to Telegram"""
+        msg = (
+            f"User: {message.from_user.first_name} {message.from_user.last_name} "
+            f"is in chat: {message.chat.id}"
+        )
+        logger.info(
+            "Sending chatinfo message: \"%s\" to: %s in chat: %s",
+            msg, message.from_user.username, message.chat.id
+        )
+        await message.reply_text(msg)
 
-    else:
-        update.message.reply_text("Got it. Thanks")
+    @app.on_message(filters=filters.command(commands="help", prefixes=COMMAND_PREFIXES))
+    async def show_help(_client: Client, message: Message):
+        """Print command help to Telegram"""
+        logger.debug(
+            "sending help message to: %s in chat: %s",
+            message.from_user.username, message.chat.id
+        )
 
+        msg = "/audiograb  - Record audio on the device and send it as a voice recording" \
+              "\n/chatinfo - Display details about the current chat location" \
+              "\n/help     - Show this help message" \
+              "\n/lsaudio [<index>|default] - List available audio devices. " \
+              "If 'default' or an index is given, give more detail about that device"
 
-def add_command(dispatcher: Dispatcher, cmdinfo: list, cfg: Config):
-    """Add a Telegram command"""
+        await message.reply_text(msg)
 
-    key, cmd, _ = cmdinfo
-    # print(f"{key} maps to {cmd}")
-    dispatcher.add_handler(CommandHandler(key, lambda u, cx: cmd(u, cx, cfg)))
+    @app.on_message(filters=filters.command(commands="lsaudio", prefixes=COMMAND_PREFIXES))
+    async def lsaudio(_client: Client, message: Message):
+        """List the available audio devices to Telegram"""
+        # print(f"RECV params: {update.message.text} and args: {str(context.args)}")
+        pyaudio = PyAudio()
+        try:
+            if message.command is not None and len(message.command) > 1:
+                idxarg = message.command[1]
+                print(f"Retrieving specific audio device: {idxarg}")
 
+                info = None
+                if "default" == idxarg:
+                    info = pyaudio.get_default_input_device_info()
+                else:
+                    idx = int(idxarg)
+                    info = pyaudio.get_device_info_by_index(idx)
 
-def start(cfg: Config):
-    """Setup / start the Telegram bot"""
+                if info is None:
+                    msg = f"No audio device found for: {idxarg}"
+                else:
+                    msg = "\n".join([f"{k}={v}" for (k, v) in info.items()])
 
-    bot = hello(cfg)
-    set_commands(bot)
+            else:
+                devices = get_input_devices(pyaudio)
+                if len(devices) > 0:
+                    lines = []
+                    for dev in devices:
+                        lines.append(
+                            f"{dev.get('index')}. {dev.get('name')} "
+                            f"(input channels: {dev.get('maxInputChannels')})"
+                        )
 
-    updater = Updater(
-        cfg.token,
-        use_context=True,
-        user_sig_handler=lambda sig, frame: goodbye(cfg, sig, frame),
-    )
-    dispatcher = updater.dispatcher
+                    msg = "\n".join(lines)
 
-    for cmd in COMMANDS:
-        add_command(dispatcher, cmd, cfg)
+                else:
+                    msg = "No valid audio input devices found!"
 
-    dispatcher.add_handler(
-        MessageHandler(Filters.all, lambda u, cx: converse(u, cx, cfg))
-    )
+                # definfo = "\n".join(
+                #   [f"{k}={v}" for (k,v) in pyaudio.get_default_input_device_info().items()]
+                # )
+                # msg = "\n".join(lines) + "\n\nDefault input device:\n" + definfo
 
-    updater.start_polling()
-    updater.idle()
+            logger.debug(
+                "Sending message: \"%s\" to: %s in chat: %s",
+                msg, message.from_user.username, message.chat.id
+            )
+            await message.reply_text(msg)
+        finally:
+            pyaudio.terminate()
 
-
-def print_help():
-    """Print available Telegram commands to the console."""
-
-    my_commands = [f"{k} - {helptxt}" for (k, _, helptxt) in COMMANDS]
-    logger.info("The following commands are available:\n\n%s\n\n", "\n".join(my_commands))
-
-
-COMMANDS = [
-    ("help", show_help, "Show this help"),
-    ("chatinfo", chatinfo, "Display information about this chat"),
-    (
-        "lsaudio",
-        lsaudio,
-        "[idx] (Optional)\n\t\t\tList audio device information from bot host.\n\t\t\t"
-        "With index param, show details.",
-    ),
-    ("audiograb", audiograb, "Record some audio on the bot host and send it back"),
-]
+    await app.start()
+    _me = await app.get_me()
+    logger.debug("Sending hello to %s", cfg.chat)
+    await app.send_message(cfg.chat, f"{_me.username} is online 🎉")

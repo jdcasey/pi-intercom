@@ -72,7 +72,7 @@ def detect_input(pyaudio: PyAudio, cfg: Config) -> dict:
     device = cfg.audio_device
     device_name = None
     device_index = None
-    if isinstance(device) == str:
+    if isinstance(device, str):
         device_name = device
     else:
         device_index = device
