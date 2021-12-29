@@ -26,6 +26,7 @@ async def has_edge():
 
 async def listen_for_buttons(client: Client, cfg: Config):
     """Simulate hardware button press, then record / send"""
+    # pylint: disable=no-member
     pygame.init()
     print("pygame initialized, waiting for keyboard events...")
 
