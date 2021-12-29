@@ -52,7 +52,8 @@ class Config:
         self.token = data.get(TOKEN)
         self.chat = data.get(CHAT)
         self.wav_threshold = data.get(WAV_THRESHOLD) or DEFAULT_WAV_THRESHOLD
-        self.wav_silence_threshold = data.get(WAV_SILENCE_THRESHOLD) or DEFAULT_WAV_SILENCE_THRESHOLD
+        self.wav_silence_threshold = data.get(WAV_SILENCE_THRESHOLD) or \
+                                     DEFAULT_WAV_SILENCE_THRESHOLD
         self.volume = data.get(VOLUME) or DEFAULT_VOLUME
         self.audio_device = data.get(AUDIO_DEVICE)
 

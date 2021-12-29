@@ -72,7 +72,7 @@ def detect_input(pyaudio: PyAudio, cfg: Config) -> dict:
     device = cfg.audio_device
     device_name = None
     device_index = None
-    if type(device) == str:
+    if isinstance(device) == str:
         device_name = device
     else:
         device_index = device
@@ -137,7 +137,10 @@ def record_wav(pyaudio: PyAudio, input_info: dict, cfg: Config, channels: int = 
         silent = is_silent(snd_data, cfg)
 
         if silent:
-            logger.debug("Silence detected. Number of contiguous, silent samples so far: %s", num_silent)
+            logger.debug(
+                "Silence detected. Number of contiguous, silent samples so far: %s",
+                num_silent
+            )
             if snd_started:
                 logger.debug("Silent++")
                 num_silent += 1

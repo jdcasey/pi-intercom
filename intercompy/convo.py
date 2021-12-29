@@ -205,7 +205,7 @@ def print_help():
     """Print available Telegram commands to the console."""
 
     my_commands = [f"{k} - {helptxt}" for (k, _, helptxt) in COMMANDS]
-    logger.info("The following commands are available:\n\n" + "\n".join(my_commands) + "\n\n")
+    logger.info("The following commands are available:\n\n%s\n\n", "\n".join(my_commands))
 
 
 COMMANDS = [
