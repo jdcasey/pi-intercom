@@ -10,7 +10,7 @@ import RPi.GPIO as gpio
 from intercompy.config import Config, GPIO
 from intercompy.convo import record_and_send
 
-
+# pylint: disable=no-member
 def init_pins(cfg: GPIO):
     """Setup GPIO pins"""
     gpio.setmode(gpio.BOARD)
