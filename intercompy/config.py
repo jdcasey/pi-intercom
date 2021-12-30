@@ -59,9 +59,10 @@ class GPIO:
     """Contain config mappings of GPIO pins to chat / user for sending recordings"""
     def __init__(self, data: dict):
         pin_map = {}
-        for pin,target in data.items():
-            if isinstance(pin, int):
-                pin_map[pin] = target
+        if data is not None:
+            for pin,target in data.items():
+                if isinstance(pin, int):
+                    pin_map[pin] = target
 
         self.pins = pin_map
 
@@ -69,6 +70,9 @@ class GPIO:
 class Audio:
     """Contain config options for audio input / output"""
     def __init__(self, data: dict):
+        if data is None:
+            data = {}
+
         self.wav_threshold = data.get(WAV_THRESHOLD) or DEFAULT_WAV_THRESHOLD
         self.wav_silence_threshold = data.get(WAV_SILENCE_THRESHOLD) or \
                                      DEFAULT_WAV_SILENCE_THRESHOLD
@@ -81,6 +85,9 @@ class Audio:
 class Telegram:
     """Contain configuration options for Telegram client"""
     def __init__(self, data: dict):
+        if data is None:
+            data = {}
+
         self.api_hash = data.get(API_HASH)
         self.api_id = data.get(API_ID)
         self.session = data.get(SESSION)
@@ -92,6 +99,9 @@ class Config:
     """Contain the configuration parameters for intercompy
     """
     def __init__(self, data: dict):
+        if data is None:
+            data = {}
+
         self.telegram = Telegram(data.get(TELEGRAM_SECTION))
         self.audio = Audio(data.get(AUDIO_SECTION))
         self.gpio = GPIO(data.get(GPIO_SECTION))

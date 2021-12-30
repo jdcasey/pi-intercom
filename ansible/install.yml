@@ -1,32 +1,113 @@
 - hosts: intercoms
   remote_user: pi
-  become: true
+
+  vars:
+    install_dir: /home/pi/intercompy
+    config_dir: /home/pi/.config/intercompy
 
   tasks:
     - name: install packages
+      become: true
       apt:
         name: '{{ packages }}'
-        state: present
+        state: latest
       vars:
         packages:
           - python3-pip
           - python3-setuptools
           - python3-wheel
           - python3-venv
+          - python3-pygame
+          - python3-rpi.gpio
+          - python3-ruamel.yaml
+          - python3-click
+          - python3-pyaudio
           - build-essential
+          - ffmpeg
+          - vlc
+      tags:
+        - never
+        - update
 
-    - name: copy files
+    - name: setup intercompy directories
+      ansible.builtin.file:
+        path: "{{item}}"
+        state: directory
+        owner: pi
+        group: pi
+        mode: '0755'
+      loop:
+        - "{{install_dir}}"
+        - "{{install_dir}}/intercompy"
+        - "{{config_dir}}"
+      tags:
+        - always
+
+    - name: copy setup.py
       ansible.builtin.copy:
-        src: "{{playbook_dir}}/.."
-        dest: /home/pi/intercom
+        src: "{{playbook_dir}}/../{{item}}"
+        dest: "{{install_dir}}/{{item}}"
         owner: pi
         group: pi
         mode: '0644'
         directory_mode: '0755'
+      loop:
+        - setup.py
+        - session_setup.py
+      tags:
+        - always
 
-    - name: setup venv
+    - name: copy module files
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{install_dir}}/intercompy/"
+        owner: pi
+        group: pi
+        mode: '0644'
+        directory_mode: '0755'
+      with_fileglob:
+        - "{{playbook_dir}}/../intercompy/*.py"
+      tags:
+        - always
+
+    - name: install intercompy
       ansible.builtin.pip:
-        chdir: /home/pi/intercom
-        virtualenv: /home/pi/intercom/venv
+        chdir: "{{install_dir}}"
+        virtualenv: "{{install_dir}}/venv"
         virtualenv_site_packages: yes
         virtualenv_command: "/usr/bin/python3 -m venv"
+        name: 'file://{{install_dir}}'
+      tags:
+        - always
+
+    - name: install configuration
+      ansible.builtin.template:
+        src: templates/config.yaml.j2
+        dest: "{{config_dir}}/config.yaml"
+        owner: pi
+        group: pi
+        mode: '0600'
+      tags:
+        - always
+
+    - name: install systemd service
+      become: true
+      ansible.builtin.template:
+        src: templates/intercompy.service.j2
+        dest: "/etc/systemd/system/intercompy.service"
+        owner: root
+        group: root
+        mode: '0644'
+      tags:
+        - always
+      notify:
+        - restart intercompy
+
+  handlers:
+    - name: restart intercompy
+      become: true
+      ansible.builtin.systemd:
+        state: restarted
+        enabled: yes
+        daemon_reload: yes
+        name: intercompy
