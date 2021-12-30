@@ -1,15 +1,15 @@
 """Handle Telegram conversations started by others, or responses from others"""
 import logging
 from tempfile import NamedTemporaryFile
+from typing import Union
 
 from pyaudio import PyAudio
 from pyrogram import Client
-from pyrogram.types import Message
 from pyrogram import filters
+from pyrogram.types import Message
 
 from intercompy.audio import record_ogg, get_input_devices, playback_ogg
-from intercompy.config import Config
-
+from intercompy.config import Config, Telegram
 
 COMMAND_PREFIXES = ["!", "/"]
 
@@ -20,14 +20,21 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def send_voice(oggfile: str, app: Client, cfg: Config):
-    """Send a voice recording to the chat channel"""
+async def record_and_send(target: Union[str, int], app: Client, cfg: Config, stop_fn=None):
+    """Record and send a voice recording to the chat channel"""
+    with NamedTemporaryFile(
+            "wb", prefix="intercom.voice-out.", suffix=".ogg", delete=False
+    ) as oggfile:
+        print("Recording voice.")
+        await record_ogg(oggfile, cfg.audio, stop_fn)
+
+    print("Sending voice")
     with open(oggfile.name, "rb") as _f:
-        logging.debug("Sending voice message to: %s", cfg.chat)
-        await app.send_voice(cfg.chat, _f)
+        logging.debug("Sending voice message to: %s", target)
+        await app.send_voice(target, _f)
 
 
-async def goodbye(app: Client, cfg: Config, sig, frame):
+async def goodbye(app: Client, cfg: Telegram, sig, frame):
     """Send a sign-off message to Telegram"""
     _me = await app.get_me()
     logger.debug("Sending goodbye to %s in frame: %s", cfg.chat, frame)
@@ -36,7 +43,7 @@ async def goodbye(app: Client, cfg: Config, sig, frame):
 
 def setup_telegram(cfg: Config) -> Client:
     """Setup the telegram client. This is just a convenience to provide a bit of encapsulation."""
-    return Client(cfg.session, cfg.api_id, cfg.api_hash)
+    return Client(cfg.telegram.session, cfg.telegram.api_id, cfg.telegram.api_hash)
 
 
 # pylint: disable=too-many-statements
@@ -50,7 +57,7 @@ async def start_telegram(app: Client, cfg: Config):
         with NamedTemporaryFile(
                 "wb", prefix="intercom.voice-out.", suffix=".ogg", delete=False
         ) as oggfile:
-            await record_ogg(oggfile, cfg)
+            await record_ogg(oggfile, cfg.audio)
             with open(oggfile.name, "rb") as _f:
                 logger.debug("Sending voice response to: %s", message.from_user.username)
                 await message.reply_voice(voice=_f)
@@ -154,9 +161,9 @@ async def start_telegram(app: Client, cfg: Config):
                 infile = temp.name
                 print(f"Wrote: {infile}")
 
-                playback_ogg(temp.name, cfg)
+                playback_ogg(temp.name, cfg.audio)
 
     await app.start()
     _me = await app.get_me()
-    logger.debug("Sending hello to %s", cfg.chat)
-    await app.send_message(cfg.chat, f"{_me.username} is online 🎉")
+    logger.debug("Sending hello to %s", cfg.telegram.chat)
+    await app.send_message(cfg.telegram.chat, f"{_me.username} is online 🎉")
