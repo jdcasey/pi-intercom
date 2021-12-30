@@ -1,6 +1,5 @@
 """Handle configuration for intercompy bot"""
 import os
-import logging
 
 from ruamel.yaml import YAML
 
@@ -23,6 +22,8 @@ WAV_THRESHOLD = "wav-threshold"
 WAV_SILENCE_THRESHOLD = "wav-silence-threshold"
 VOLUME = "playback-volume"
 AUDIO_DEVICE = "device"
+
+GPIO_SECTION = "pin-targets"
 
 DEFAULT_VOLUME = 75
 DEFAULT_WAV_THRESHOLD = 500
@@ -53,16 +54,18 @@ def load(config_file: str = None):
     return Config(data)
 
 
+# pylint: disable=too-few-public-methods
 class GPIO:
     """Contain config mappings of GPIO pins to chat / user for sending recordings"""
     def __init__(self, data: dict):
         pin_map = {}
-        for pin,target in dict.items():
+        for pin,target in data.items():
             if isinstance(pin, int):
                 pin_map[pin] = target
 
         self.pins = pin_map
 
+# pylint: disable=too-few-public-methods
 class Audio:
     """Contain config options for audio input / output"""
     def __init__(self, data: dict):
@@ -74,6 +77,7 @@ class Audio:
         self.audio_device = data.get(AUDIO_DEVICE)
 
 
+# pylint: disable=too-few-public-methods
 class Telegram:
     """Contain configuration options for Telegram client"""
     def __init__(self, data: dict):
@@ -83,10 +87,11 @@ class Telegram:
         self.chat = data.get(CHAT)
 
 
+# pylint: disable=too-few-public-methods
 class Config:
     """Contain the configuration parameters for intercompy
     """
-    # pylint: disable=too-many-instance-attributes
     def __init__(self, data: dict):
         self.telegram = Telegram(data.get(TELEGRAM_SECTION))
         self.audio = Audio(data.get(AUDIO_SECTION))
+        self.gpio = GPIO(data.get(GPIO_SECTION))

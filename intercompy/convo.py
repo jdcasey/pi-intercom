@@ -5,8 +5,8 @@ from typing import Union
 
 from pyaudio import PyAudio
 from pyrogram import Client
-from pyrogram.types import Message
 from pyrogram import filters
+from pyrogram.types import Message
 
 from intercompy.audio import record_ogg, get_input_devices, playback_ogg
 from intercompy.config import Config, Telegram
@@ -20,11 +20,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def send_voice(oggfile: NamedTemporaryFile, app: Client, chat: Union[str, int]):
-    """Send a voice recording to the chat channel"""
+async def record_and_send(target: Union[str, int], app: Client, cfg: Config, stop_fn=None):
+    """Record and send a voice recording to the chat channel"""
+    with NamedTemporaryFile(
+            "wb", prefix="intercom.voice-out.", suffix=".ogg", delete=False
+    ) as oggfile:
+        print("Recording voice.")
+        await record_ogg(oggfile, cfg.audio, stop_fn)
+
+    print("Sending voice")
     with open(oggfile.name, "rb") as _f:
-        logging.debug("Sending voice message to: %s", chat)
-        await app.send_voice(chat, _f)
+        logging.debug("Sending voice message to: %s", target)
+        await app.send_voice(target, _f)
 
 
 async def goodbye(app: Client, cfg: Telegram, sig, frame):

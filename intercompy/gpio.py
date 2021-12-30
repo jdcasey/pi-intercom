@@ -1,17 +1,17 @@
 """Use GPIO edges to drive recording and posting to various chats"""
 
 from asyncio import sleep
-from tempfile import NamedTemporaryFile
 
 from pyrogram import Client
+
+# pylint: disable=import-error
 import RPi.GPIO as gpio
 
-from intercompy.audio import record_ogg
 from intercompy.config import Config, GPIO
-from intercompy.convo import send_voice
+from intercompy.convo import record_and_send
 
 
-def init(cfg: GPIO):
+def init_pins(cfg: GPIO):
     """Setup GPIO pins"""
     gpio.setmode(gpio.BOARD)
     for pin in cfg.pins.keys():
@@ -23,23 +23,14 @@ async def has_edge(pin: int) -> bool:
     return not gpio.input(pin)
 
 
-async def listen_for_buttons(client: Client, cfg: Config):
+async def listen_for_pins(client: Client, cfg: Config):
     """Watch for GPIO edges, then record / send"""
     while True:
         if client.is_connected:
             for pin, target in cfg.gpio.pins.items():
                 if await has_edge(pin):
-                    with NamedTemporaryFile(
-                            "wb", prefix="intercom.voice-out.", suffix=".ogg", delete=False
-                    ) as oggfile:
-                        print("Recording voice.")
-                        await record_ogg(oggfile, cfg.audio, has_edge)
-
-                    print("Sending voice")
-                    await send_voice(oggfile, client, target)
+                    await record_and_send(target, client, cfg, has_edge)
 
             await sleep(0.01)
         else:
             await sleep(1)
-
-

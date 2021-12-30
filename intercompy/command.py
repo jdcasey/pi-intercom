@@ -1,16 +1,14 @@
 """Command-line interface for intercompy"""
 import logging
 from asyncio import gather, get_event_loop, sleep
-from tempfile import NamedTemporaryFile
 
 import click
 import pygame
 from pyrogram import Client
 
-from intercompy.audio import record_ogg
 from intercompy.config import load, Config
-from intercompy.convo import start_telegram, setup_telegram, send_voice
-from intercompy.gpio import init as gpio_init
+from intercompy.convo import start_telegram, setup_telegram, record_and_send
+from intercompy.gpio import init_pins, listen_for_pins
 
 
 async def has_edge():
@@ -25,7 +23,7 @@ async def has_edge():
     return False
 
 
-async def listen_for_buttons(client: Client, cfg: Config):
+async def listen_for_keyboard(client: Client, cfg: Config):
     """Simulate hardware button press, then record / send"""
     # pylint: disable=no-member
     pygame.init()
@@ -34,14 +32,7 @@ async def listen_for_buttons(client: Client, cfg: Config):
     while True:
         if client.is_connected:
             if await has_edge():
-                with NamedTemporaryFile(
-                        "wb", prefix="intercom.voice-out.", suffix=".ogg", delete=False
-                ) as oggfile:
-                    print("Recording voice.")
-                    await record_ogg(oggfile, cfg.audio, has_edge)
-
-                print("Sending voice")
-                await send_voice(oggfile, client, cfg.telegram.chat)
+                await record_and_send(cfg.telegram.chat, client, cfg, has_edge)
 
             await sleep(0.01)
         else:
@@ -64,10 +55,11 @@ def run(config_file: str = None, debug: bool = False):
     cfg = load(config_file)
 
     app = setup_telegram(cfg)
-    gpio_init(cfg.gpio)
+    init_pins(cfg.gpio)
 
     gather(
         start_telegram(app, cfg),
-        listen_for_buttons(app, cfg),
+        listen_for_keyboard(app, cfg),
+        listen_for_pins(app, cfg)
     )
     get_event_loop().run_forever()
