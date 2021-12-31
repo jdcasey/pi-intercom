@@ -1,0 +1,13 @@
+[Unit]
+Description=Intercom-py Intercom System
+Documentation=https://github.com/jdcasey/intercompy
+After=network-online.target
+
+[Service]
+User=pi
+Group=pi
+ExecStart={{install_dir}}/venv/bin/intercom -f {{config_dir}}/config.yaml
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

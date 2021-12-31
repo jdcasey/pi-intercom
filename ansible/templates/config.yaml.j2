@@ -1,0 +1,16 @@
+---
+audio:
+  device: {{intercompy_device|default(0)}}
+  wav-silence-threshold: {{intercompy_wav_silence_threshold|default(10)}}
+
+telegram:
+  chat: {{intercompy_telegram_default_chat|mandatory}}
+  
+  api-id: {{intercompy_telegram_api_id|mandatory}}
+  api-hash: {{intercompy_telegram_api_hash|mandatory}}
+
+  session: {{intercompy_telegram_session|mandatory}}
+
+gpio:
+  {{intercompy_gpio|mandatory|to_nice_yaml(indent=2)}}
+
