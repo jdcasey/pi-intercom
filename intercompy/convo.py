@@ -8,7 +8,7 @@ from pyrogram import Client
 from pyrogram import filters
 from pyrogram.types import Message
 
-from intercompy.audio import record_ogg, get_input_devices, playback_ogg
+from intercompy.audio import record_ogg, get_input_devices, get_output_devices, playback_ogg
 from intercompy.config import Config, Telegram
 
 COMMAND_PREFIXES = ["!", "/"]
@@ -114,7 +114,7 @@ async def start_telegram(app: Client, cfg: Config):
                     msg = "\n".join([f"{k}={v}" for (k, v) in info.items()])
 
             else:
-                devices = get_input_devices(pyaudio)
+                devices = get_input_devices(pyaudio) + get_output_devices(pyaudio)
                 if len(devices) > 0:
                     lines = []
                     for dev in devices:

@@ -64,6 +64,51 @@ def __is_valid_input(dev):
     return 0 < in_channels < 3
 
 
+def __is_valid_output(dev):
+    """Determine whether the given audio device is suitable for playback."""
+
+    in_channels = int(dev.get("maxOutputChannels"))
+    return 0 < in_channels
+
+
+def detect_input(pyaudio: PyAudio, cfg: Audio) -> dict:
+    """
+    Find the audio input device
+    """
+
+    device = cfg.audio_device
+    device_name = None
+    device_index = None
+    if isinstance(device, str):
+        device_name = device
+    else:
+        device_index = device
+
+    input_info = pyaudio.get_default_input_device_info()
+    device_count = pyaudio.get_device_count()
+
+    if input_info is None and device_index is not None and device_index < device_count-1:
+        dev = pyaudio.get_device_info_by_index(int(device_index))
+        if __is_valid_input(dev):
+            input_info = dev
+        else:
+            logger.error("Configured input device %s is INVALID! Info:\n\n%s", device_index, dev)
+
+    if input_info is None:
+        logger.info("Selecting a candidate input device from the list...")
+        for idx in range(device_count):
+            dev = pyaudio.get_device_info_by_index(idx)
+            if __is_valid_input(dev):
+                if device_name is None or dev['name'] == device_name:
+                    input_info = dev
+                    break
+
+    if input_info is None:
+        logger.error("No valid input devices found!")
+
+    return input_info
+
+
 def detect_input(pyaudio: PyAudio, cfg: Audio) -> dict:
     """
     Find the audio input device
@@ -238,6 +283,22 @@ def get_input_devices(pyaudio: PyAudio) -> dict:
         dev = pyaudio.get_device_info_by_index(idx)
         logger.debug("Checking device: %(index)s - %(name)s", dev)
         if __is_valid_input(dev):
+            # dev['index'] = idx
+            logger.debug("adding device: %(index)s - %(name)s", dev)
+            devices.append(dev)
+
+    return devices
+
+def get_output_devices(pyaudio: PyAudio) -> dict:
+    """Retrieve the list of viable playback devices"""
+    devices = []
+
+    count = pyaudio.get_device_count()
+    logger.debug("Checking %s devices...", count)
+    for idx in range(count):
+        dev = pyaudio.get_device_info_by_index(idx)
+        logger.debug("Checking device: %(index)s - %(name)s", dev)
+        if __is_valid_output(dev):
             # dev['index'] = idx
             logger.debug("adding device: %(index)s - %(name)s", dev)
             devices.append(dev)
