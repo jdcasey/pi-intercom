@@ -3,46 +3,47 @@ import logging
 from asyncio import gather, get_event_loop, sleep
 
 import click
-import pygame
 from pyrogram import Client
 
-from intercompy.config import load, Config
+import sys
+import select
+import tty
+import termios
+
+from intercompy.config import load_config, Config
 from intercompy.convo import start_telegram, setup_telegram, record_and_send
+
 from intercompy.gpio import init_pins, listen_for_pins
 
 
 async def has_edge():
     """Detect a keyboard edge (down / up) to simulate triggering of record via hardware buttons"""
-    for event in pygame.event.get():
-        # No idea what 772 is, but it shows up when I press or release the shift key.
-        if event.type == 772:
-            print("Detected edge!")
-            return True
-
-    # print("No edge detected")
-    return False
+    return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
 
 
-async def listen_for_keyboard(client: Client, cfg: Config):
+async def listen_for_keyboard(client: Client, cfg: Config, use_keyboard: bool):
     """Simulate hardware button press, then record / send"""
     # pylint: disable=no-member
-    pygame.init()
-    print("pygame initialized, waiting for keyboard events...")
+    if not use_keyboard:
+        print("Keyboard recording triggers disabled.")
+    else:
+        print("Waiting for keyboard events...")
 
-    while True:
-        if client.is_connected:
-            if await has_edge():
-                await record_and_send(cfg.telegram.chat, client, cfg, has_edge)
+        while True:
+            if client.is_connected:
+                if await has_edge():
+                    await record_and_send(cfg.telegram.chat, client, cfg)
 
-            await sleep(0.01)
-        else:
-            await sleep(1)
+                await sleep(0.01)
+            else:
+                await sleep(1)
 
 
 @click.command()
 @click.option("--config-file", "-f", help="Alternative config YAML")
 @click.option("--debug", "-d", is_flag=True, help="Turn on debug logging")
-def run(config_file: str = None, debug: bool = False):
+@click.option("--keyboard", "-k", is_flag=True, help="Turn on keyboard recording trigger")
+def run(config_file: str = None, keyboard: bool = False, debug: bool = False):
     """Start the bot listening for intercom messages"""
     log_level = logging.INFO
     if debug:
@@ -52,14 +53,22 @@ def run(config_file: str = None, debug: bool = False):
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=log_level
     )
 
-    cfg = load(config_file)
+    cfg = load_config(config_file)
 
     app = setup_telegram(cfg)
     init_pins(cfg.gpio)
 
-    gather(
-        start_telegram(app, cfg),
-        listen_for_keyboard(app, cfg),
-        listen_for_pins(app, cfg)
-    )
-    get_event_loop().run_forever()
+    old_term_settings = termios.tcgetattr(sys.stdin)
+    try:
+        if keyboard:
+            tty.setcbreak(sys.stdin.fileno())
+
+        gather(
+            start_telegram(app, cfg),
+            listen_for_keyboard(app, cfg, keyboard),
+            listen_for_pins(app, cfg)
+        )
+        get_event_loop().run_forever()
+    finally:
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_term_settings)
+

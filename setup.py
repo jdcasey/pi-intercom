@@ -2,6 +2,13 @@
 
 from setuptools import setup, find_packages
 
+deps = []
+with open("requirements.txt") as f:
+    for line in f.readlines():
+        line = line.strip()
+        if len(line) > 0 and not line.startswith("#"):
+            deps.append(line)
+
 setup(
     zip_safe=True,
     name='intercompy',
@@ -19,17 +26,7 @@ setup(
     url='https://github.com/jdcasey/pi-intercom',
     license='GPLv3+',
     packages=find_packages(exclude=['ez_setup', 'examples', 'tests']),
-    install_requires=[
-      "pygame",
-      "rpi.gpio",
-      "pyrogram",
-      "tgcrypto",
-      "ruamel.yaml",
-      "click",
-      "pyaudio",
-      'python-vlc',
-      'ffmpy',
-    ],
+    install_requires=deps,
     include_package_data=True,
     test_suite="tests",
     entry_points={

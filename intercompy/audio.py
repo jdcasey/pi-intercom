@@ -7,11 +7,18 @@ import wave
 from array import array
 from struct import pack
 from sys import byteorder
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import Tuple
 
+from gtts import gTTS as tts
+from playsound import playsound
+
+import speech_recognition as sr
+from pydub import AudioSegment
+from pydub.silence import split_on_silence
+
 import ffmpy
-import vlc
+from beepy import beep
 from pyaudio import PyAudio, paInt16
 
 from intercompy.config import Audio
@@ -24,9 +31,68 @@ logger = logging.getLogger(__name__)
 # WAV recording logic is adapted from:
 # https://stackoverflow.com/questions/892199/detect-record-audio-in-python
 
+SND_INTERCOM_ONLINE = ["intercom-online", "Your intercom is now online."]
+SND_RECORD_YOUR_MESSAGE = ["record-message", "Please record your message."]
+SND_SENDING_MESSAGE = ["sending-message", "Sending audio message."]
+SND_SNOOPING_AUDIO_START = ["snoop-audio-start", "Starting remote recording in 3 seconds."]
+RECORDINGS = {}
+
+
+async def speech_to_text(soundfile: NamedTemporaryFile) -> str:
+    r = sr.Recognizer()
+    sound = AudioSegment.from_ogg(soundfile.name)
+
+    chunks = split_on_silence(sound, min_silence_len=100, silence_thresh=sound.dBFS - 24,
+                              keep_silence=100)
+    translation = []
+    with TemporaryDirectory("intercom.speech-to-text") as tdname:
+        for i, chunk in enumerate(chunks, start=1):
+            fname = os.path.join(tdname, f"chunk{i}.wav")
+            chunk.export(fname, format="wav")
+
+            with sr.AudioFile(fname) as source:
+                aud = r.record(source)
+                try:
+                    text = r.recognize_google(aud)
+                    translation.append(text)
+                except sr.UnknownValueError as e:
+                    print("Translation error:", str(e))
+
+    return " ".join(translation)
+
+
+async def play_prompt_text(snd: Tuple[str, str], cfg: Audio):
+    key = snd[0]
+    prompts = cfg.prompts
+    txt = prompts.get(key) or snd[1]
+    message_file = RECORDINGS.get(key)
+    if message_file is None:
+        msg = NamedTemporaryFile(
+            "wb", prefix="intercom.prompts.", suffix=".ogg", delete=False
+        )
+
+        speech = tts(txt, lang=cfg.text_lang, tld=cfg.text_accent)
+        speech.save(msg.name)
+
+        message_file = msg
+        RECORDINGS[key] = message_file
+
+    playsound(message_file.name)
+
+
+async def play_impromptu_text(text: str, cfg: Audio):
+    with NamedTemporaryFile(
+            "wb", prefix="intercom.text.", suffix=".ogg", delete=False
+    ) as msg:
+        speech = tts(text, lang=cfg.text_lang, tld=cfg.text_accent)
+        speech.save(msg.name)
+
+        playsound(msg.name)
+        os.remove(msg)
+
 
 def is_silent(snd_data: array, cfg: Audio) -> bool:
-    "Returns 'True' if below the 'silent' threshold"
+    """Returns 'True' if below the 'silent' threshold"""
     return max(snd_data) < cfg.wav_threshold
 
 
@@ -57,14 +123,14 @@ def trim(snd_data: array, cfg: Audio) -> array:
     return snd_data
 
 
-def __is_valid_input(dev):
+def __is_valid_input(dev) -> bool:
     """Determine whether the given audio device is suitable for recording voice."""
 
     in_channels = int(dev.get("maxInputChannels"))
     return 0 < in_channels < 3
 
 
-def __is_valid_output(dev):
+def __is_valid_output(dev) -> bool:
     """Determine whether the given audio device is suitable for playback."""
 
     in_channels = int(dev.get("maxOutputChannels"))
@@ -87,45 +153,7 @@ def detect_input(pyaudio: PyAudio, cfg: Audio) -> dict:
     input_info = pyaudio.get_default_input_device_info()
     device_count = pyaudio.get_device_count()
 
-    if input_info is None and device_index is not None and device_index < device_count-1:
-        dev = pyaudio.get_device_info_by_index(int(device_index))
-        if __is_valid_input(dev):
-            input_info = dev
-        else:
-            logger.error("Configured input device %s is INVALID! Info:\n\n%s", device_index, dev)
-
-    if input_info is None:
-        logger.info("Selecting a candidate input device from the list...")
-        for idx in range(device_count):
-            dev = pyaudio.get_device_info_by_index(idx)
-            if __is_valid_input(dev):
-                if device_name is None or dev['name'] == device_name:
-                    input_info = dev
-                    break
-
-    if input_info is None:
-        logger.error("No valid input devices found!")
-
-    return input_info
-
-
-def detect_input(pyaudio: PyAudio, cfg: Audio) -> dict:
-    """
-    Find the audio input device
-    """
-
-    device = cfg.audio_device
-    device_name = None
-    device_index = None
-    if isinstance(device, str):
-        device_name = device
-    else:
-        device_index = device
-
-    input_info = pyaudio.get_default_input_device_info()
-    device_count = pyaudio.get_device_count()
-
-    if input_info is None and device_index is not None and device_index < device_count-1:
+    if input_info is None and device_index is not None and device_index < device_count - 1:
         dev = pyaudio.get_device_info_by_index(int(device_index))
         if __is_valid_input(dev):
             input_info = dev
@@ -229,78 +257,58 @@ def __write_wav(input_info: dict, channels: int, sample_width: int, data: bytes,
     _wf.writeframes(data)
 
 
-async def record_ogg(oggfile: NamedTemporaryFile, cfg: Audio, stop_fn=None):
+async def ding(times=1):
+    for i in range(times):
+        print('\a')
+
+
+async def record_ogg(cfg: Audio, stop_fn=None) -> NamedTemporaryFile:
     """Records from the microphone and outputs the resulting data to 'path'
     """
 
+    oggfile = NamedTemporaryFile(
+        "wb", prefix="intercom.voice-out.", suffix=".ogg", delete=False
+    )
+    wavfile = NamedTemporaryFile(
+        "wb", prefix="intercom.voice-out.", suffix=".wav", delete=False
+    )
+
     pyaudio = PyAudio()
+
+    await ding()
     try:
         input_info = detect_input(pyaudio, cfg)
         if input_info is None:
             raise Exception("Cannot find valid input!")
-        channels = min(int(input_info.get("maxInputChannels")), 4)
+        channels = min(int(input_info.get("maxInputChannels")), 2)
 
         sample_width, data = await record_wav(pyaudio, input_info, cfg, channels, stop_fn)
         data = pack("<" + ("h" * len(data)), *data)
 
-        with NamedTemporaryFile(
-            "wb", prefix="intercom.recording.", suffix=".wav", delete=False
-        ) as wavfile:
+        await ding(2)
+        with wave.open(wavfile.name, mode="wb") as _wf:
+            __write_wav(input_info, channels, sample_width, data, _wf)
 
-            with wave.open(wavfile.name, mode="wb") as _wf:
-                __write_wav(input_info, channels, sample_width, data, _wf)
+        ffmpeg = ffmpy.FFmpeg(
+            inputs={wavfile.name: None}, outputs={oggfile.name: ["-y", "-f", "ogg"]}
+        )
+        ffmpeg.run()
 
-            ffmpeg = ffmpy.FFmpeg(
-                inputs={wavfile.name: None}, outputs={oggfile.name: ["-y", "-f", "ogg"]}
-            )
-            ffmpeg.run()
+        ffmpeg2 = ffmpy.FFmpeg(
+            inputs={oggfile.name: None}, outputs={wavfile.name: ["-y"]}
+        )
+        ffmpeg2.run()
 
-        os.remove(wavfile.name)
+        return oggfile
     finally:
         pyaudio.terminate()
         print("pyaudio terminated")
 
+        os.remove(wavfile.name)
+
+
 
 def playback_ogg(filename: str, cfg: Audio):
-    """ Play a .ogg file using VLC
+    """ Play an .ogg file
     """
-    _v = vlc.Instance("--aout=alsa")
-    _p = _v.media_player_new()
-    vlc.libvlc_audio_set_volume(_p, cfg.volume)
-
-    _m = _v.media_new(filename)
-    _p.set_media(_m)
-    _p.play()
-
-
-def get_input_devices(pyaudio: PyAudio) -> dict:
-    """Retrieve the list of viable recording devices"""
-    devices = []
-
-    count = pyaudio.get_device_count()
-    logger.debug("Checking %s devices...", count)
-    for idx in range(count):
-        dev = pyaudio.get_device_info_by_index(idx)
-        logger.debug("Checking device: %(index)s - %(name)s", dev)
-        if __is_valid_input(dev):
-            # dev['index'] = idx
-            logger.debug("adding device: %(index)s - %(name)s", dev)
-            devices.append(dev)
-
-    return devices
-
-def get_output_devices(pyaudio: PyAudio) -> dict:
-    """Retrieve the list of viable playback devices"""
-    devices = []
-
-    count = pyaudio.get_device_count()
-    logger.debug("Checking %s devices...", count)
-    for idx in range(count):
-        dev = pyaudio.get_device_info_by_index(idx)
-        logger.debug("Checking device: %(index)s - %(name)s", dev)
-        if __is_valid_output(dev):
-            # dev['index'] = idx
-            logger.debug("adding device: %(index)s - %(name)s", dev)
-            devices.append(dev)
-
-    return devices
+    playsound(filename)

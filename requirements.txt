@@ -1,0 +1,29 @@
+# configuration (config.py)
+ruamel.yaml
+
+# command-line (command.py)
+click
+
+# pin / button triggers, LED output, etc. (gpio.py)
+gpiozero
+
+# keyboard detection, simulating GPIO input (command.py)
+#termios
+
+# Telegram connectivity with encryption (convo.py, session_setup.py)
+pyrogram
+tgcrypto
+
+# audio recording (audio.py)
+pyaudio
+ffmpy
+beepy
+
+# text to speech (audio.py)
+gTTs
+pyttsx3
+playsound
+
+# speech to text (audio.py)
+SpeechRecognition
+pydub

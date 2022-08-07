@@ -17,14 +17,14 @@
           - python3-setuptools
           - python3-wheel
           - python3-venv
-          - python3-pygame
-          - python3-rpi.gpio
-          - python3-ruamel.yaml
-          - python3-click
-          - python3-pyaudio
+          - python3-pygame # Keyboard GPIO simulation
+          - python3-rpi.gpio # Pin / button listening, LED feedback, etc.
+          - python3-ruamel.yaml # Configuration
+          - python3-click # Command-line args
+          - python3-pyaudio # Audio recording
           - build-essential
-          - ffmpeg
-          - vlc
+          - ffmpeg # Audio recording
+          - vlc # Audio playback
       tags:
         - never
         - update

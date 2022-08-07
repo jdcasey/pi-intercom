@@ -9,9 +9,12 @@ HOME_CONFIG_FILE = os.path.join(
     os.environ.get("HOME"), ".config/intercompy/config.yaml"
 )
 
+ROLODEX = "rolodex"
+
 TELEGRAM_SECTION = "telegram"
 
 SESSION = "session"
+ACCOUNT_NAME = "account-name"
 API_HASH = "api-hash"
 API_ID = "api-id"
 CHAT = "chat"
@@ -22,6 +25,9 @@ WAV_THRESHOLD = "wav-threshold"
 WAV_SILENCE_THRESHOLD = "wav-silence-threshold"
 VOLUME = "playback-volume"
 AUDIO_DEVICE = "device"
+TEXT_LANGUAGE = "text-language"
+TEXT_ACCENT = "text-accent"
+AUDIO_PROMPTS = "prompts"
 
 GPIO_SECTION = "pin-targets"
 
@@ -30,7 +36,7 @@ DEFAULT_WAV_THRESHOLD = 500
 DEFAULT_WAV_SILENCE_THRESHOLD = 30
 
 
-def load(config_file: str = None):
+def load_config(config_file: str = None):
     """
     Load configuration, starting with the specified file if available.
     If not, try to load from one of two standard locations, in the
@@ -77,6 +83,11 @@ class Audio:
         self.wav_silence_threshold = data.get(WAV_SILENCE_THRESHOLD) or \
                                      DEFAULT_WAV_SILENCE_THRESHOLD
 
+        self.text_lang = data.get(TEXT_LANGUAGE) or "en"
+        self.text_accent = data.get(TEXT_ACCENT) or "com"
+
+        self.prompts = data.get(AUDIO_PROMPTS) or {}
+
         self.volume = data.get(VOLUME) or DEFAULT_VOLUME
         self.audio_device = data.get(AUDIO_DEVICE)
 
@@ -88,6 +99,7 @@ class Telegram:
         if data is None:
             data = {}
 
+        self.account_name = data.get(ACCOUNT_NAME)
         self.api_hash = data.get(API_HASH)
         self.api_id = data.get(API_ID)
         self.session = data.get(SESSION)
@@ -105,3 +117,4 @@ class Config:
         self.telegram = Telegram(data.get(TELEGRAM_SECTION))
         self.audio = Audio(data.get(AUDIO_SECTION))
         self.gpio = GPIO(data.get(GPIO_SECTION))
+        self.rolodex = data.get(ROLODEX) or {}
