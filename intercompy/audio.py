@@ -258,8 +258,11 @@ def __write_wav(input_info: dict, channels: int, sample_width: int, data: bytes,
 
 
 async def ding(times=1):
-    for i in range(times):
-        print('\a')
+    try:
+        for i in range(times):
+            print('\a')
+    except Exception as e:
+        print(str(e))
 
 
 async def record_ogg(cfg: Audio, stop_fn=None) -> NamedTemporaryFile:

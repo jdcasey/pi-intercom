@@ -4,6 +4,9 @@ from asyncio import sleep
 
 from pyrogram import Client
 
+from intercompy.config import Config, Rolodex
+from intercompy.convo import record_and_send
+
 # pylint: disable=import-error
 LOADED_GPIO = False
 try:
@@ -13,18 +16,16 @@ try:
 except ModuleNotFoundError as e:
     print(e)
 
-from intercompy.config import Config, GPIO
-from intercompy.convo import record_and_send
 
 # pylint: disable=no-member
-def init_pins(cfg: GPIO):
+def init_pins(cfg: Rolodex):
     """Setup GPIO pins"""
     if not LOADED_GPIO:
         print("No GPIO available. Skipping")
         return
 
     gpio.setmode(gpio.BOARD)
-    for pin in cfg.pins.keys():
+    for pin in cfg.rolodex.get_pins():
         gpio.setup(pin, gpio.IN, pull_up_down=gpio.PUD_UP)
 
 
@@ -40,10 +41,11 @@ async def listen_for_pins(client: Client, cfg: Config):
 
     while True:
         if client.is_connected:
-            for pin, target in cfg.gpio.pins.items():
+            for pin in cfg.rolodex.get_pins():
                 if await has_edge(pin):
-                    print(f"PIN: {pin}")
-                    await record_and_send(target, client, cfg, has_edge)
+                    target = cfg.rolodex.get_pin_target(pin)
+                    print(f"PIN: {pin}, Target: {target}")
+                    await record_and_send(target, client, cfg)
 
             await sleep(0.01)
         else:

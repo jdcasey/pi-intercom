@@ -63,7 +63,7 @@ def setup_telegram(cfg: Config) -> Client:
 # pylint: disable=too-many-statements
 def format_sender_name(message: Message, cfg: Config) -> str:
     name = f"{message.from_user.first_name} {message.from_user.last_name}"
-    return cfg.rolodex.get(name) or name
+    return cfg.rolodex.get_alias(name)
 
 
 async def start_telegram(app: Client, cfg: Config):

@@ -56,7 +56,7 @@ def run(config_file: str = None, keyboard: bool = False, debug: bool = False):
     cfg = load_config(config_file)
 
     app = setup_telegram(cfg)
-    init_pins(cfg.gpio)
+    init_pins(cfg.rolodex)
 
     old_term_settings = termios.tcgetattr(sys.stdin)
     try:

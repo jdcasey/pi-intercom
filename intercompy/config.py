@@ -1,5 +1,7 @@
 """Handle configuration for intercompy bot"""
 import os
+import typing
+from typing import Optional
 
 from ruamel.yaml import YAML
 
@@ -61,18 +63,6 @@ def load_config(config_file: str = None):
 
 
 # pylint: disable=too-few-public-methods
-class GPIO:
-    """Contain config mappings of GPIO pins to chat / user for sending recordings"""
-    def __init__(self, data: dict):
-        pin_map = {}
-        if data is not None:
-            for pin,target in data.items():
-                if isinstance(pin, int):
-                    pin_map[pin] = target
-
-        self.pins = pin_map
-
-# pylint: disable=too-few-public-methods
 class Audio:
     """Contain config options for audio input / output"""
     def __init__(self, data: dict):
@@ -107,6 +97,35 @@ class Telegram:
 
 
 # pylint: disable=too-few-public-methods
+class Rolodex:
+    """Contain configuration related to intercom chat members"""
+    def __init__(self, data: dict):
+        if data is None:
+            data = {}
+
+        self.data = data
+
+    def get_alias(self, name: str) -> str:
+        """Return the registered alias for the name, or else the name itself"""
+        if name in self.data:
+            return self.data[name]["alias"] or name
+
+        return name
+
+    def get_pins(self) -> typing.List[int]:
+        """Return the list of GPIO pins to watch"""
+        return [int(e["pin"]) for e in self.data.values()]
+
+    def get_pin_target(self, pin: int) -> Optional[str]:
+        """Return the target for the specified GPIO pin"""
+        for entry in self.data.values():
+            if int(entry["pin"]) == pin:
+                return entry["id"]
+
+        return None
+
+
+# pylint: disable=too-few-public-methods
 class Config:
     """Contain the configuration parameters for intercompy
     """
@@ -116,5 +135,4 @@ class Config:
 
         self.telegram = Telegram(data.get(TELEGRAM_SECTION))
         self.audio = Audio(data.get(AUDIO_SECTION))
-        self.gpio = GPIO(data.get(GPIO_SECTION))
-        self.rolodex = data.get(ROLODEX) or {}
+        self.rolodex = Rolodex(data.get(ROLODEX))
