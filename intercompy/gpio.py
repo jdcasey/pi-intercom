@@ -35,6 +35,10 @@ def init_pins(cfg: Rolodex):
 
 
 async def button_pushed(pin: int, cfg: Config, client: Optional[Client]):
+    """
+        When a rolodex button is pushed, respond appropriately based on whether Telegram is
+        available.
+    """
     target = cfg.rolodex.get_pin_target(pin)
     print(f"PIN: {pin}, Target: {target} ({cfg.rolodex.get_pin_alias(pin)})")
     if client and client.is_connected:
@@ -45,6 +49,7 @@ async def button_pushed(pin: int, cfg: Config, client: Optional[Client]):
 
 
 async def scan_buttons(cfg: Config, client: Optional[Client]):
+    """Setup a scanning loop for all buttons listed in the rolodex config."""
     while True:
         for pin in cfg.rolodex.get_pins():
             if gpio.input(pin) == 0:

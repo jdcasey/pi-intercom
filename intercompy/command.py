@@ -11,7 +11,9 @@ from intercompy.gpio import init_pins, listen_for_pins
 from intercompy.util import setup_session
 
 
-def boot(config_file: str = None, debug: bool = False) -> Config:
+def _boot(config_file: str = None, debug: bool = False) -> Config:
+    """Read configuration, setup debug/normal logging. Part of all commands."""
+
     log_level = logging.INFO
     if debug:
         log_level = logging.DEBUG
@@ -28,7 +30,7 @@ def boot(config_file: str = None, debug: bool = False) -> Config:
 @click.option("--config-file", "-f", help="Alternative config YAML")
 def session_setup(config_file: str = None):
     """Interactively setup a new Telegram session for storage in config.yaml"""
-    cfg = boot(config_file, True)
+    cfg = _boot(config_file, True)
     setup_session(cfg)
 
 
@@ -36,7 +38,7 @@ def session_setup(config_file: str = None):
 @click.option("--config-file", "-f", help="Alternative config YAML")
 def selftest_gpio(config_file: str = None):
     """Self-test the GPIO functions, including a text-to-audio prompting test"""
-    cfg = boot(config_file, True)
+    cfg = _boot(config_file, True)
     selftest.test_gpio(cfg)
 
 
@@ -48,7 +50,7 @@ def run(config_file: str = None, debug: bool = False):
     loop = new_event_loop()
     set_event_loop(loop)
 
-    cfg = boot(config_file, debug)
+    cfg = _boot(config_file, debug)
 
     print("Setting up Telegram client")
     app = setup_telegram(cfg)

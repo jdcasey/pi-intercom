@@ -8,6 +8,7 @@ from intercompy.config import Config
 
 def test_gpio(cfg: Config):
     """ Test whether GPIO is working correctly, including a test of voice prompt / feedback."""
+    # pylint: disable=import-outside-toplevel
     from intercompy.gpio import init_pins, listen_for_pins
 
     print("Setting up hardware buttons")
