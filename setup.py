@@ -12,7 +12,7 @@ with open("requirements.in.txt") as f:
 setup(
     zip_safe=True,
     name='intercompy',
-    version='0.0.1',
+    version='0.9',
     long_description="Turn a Raspberry Pi into an intercom with Telegram",
     classifiers=[
       "Development Status :: 3 - Alpha",
