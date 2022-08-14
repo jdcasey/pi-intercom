@@ -1,10 +1,15 @@
+"""
+Run various kinds of self-test on an installation environment.
+"""
 from asyncio import gather, new_event_loop, set_event_loop
 
-from intercompy.config import load_config, Config
-from intercompy.gpio import init_pins, listen_for_pins
+from intercompy.config import Config
 
 
 def test_gpio(cfg: Config):
+    """ Test whether GPIO is working correctly, including a test of voice prompt / feedback."""
+    from intercompy.gpio import init_pins, listen_for_pins
+
     print("Setting up hardware buttons")
     init_pins(cfg.rolodex)
 

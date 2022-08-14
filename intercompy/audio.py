@@ -1,25 +1,23 @@
 """
 Capture and play audio for use with Telegram. Uses ffmpeg for recording and vlc for playback.
 """
-from asyncio import sleep
 import logging
 import os
 import wave
 from array import array
+from asyncio import sleep
 from struct import pack
 from sys import byteorder
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import Tuple
 
-from gtts import gTTS as tts
-
+import ffmpy
 import speech_recognition as sr
+import vlc
+from gtts import gTTS as tts
+from pyaudio import PyAudio, paInt16
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
-
-import ffmpy
-import vlc
-from pyaudio import PyAudio, paInt16
 
 from intercompy.config import Audio
 
@@ -39,7 +37,12 @@ RECORDINGS = {}
 
 
 async def speech_to_text(soundfile: NamedTemporaryFile) -> str:
-    r = sr.Recognizer()
+    """
+        Transform a recorded voice to text for sending separately, to help in high-noise
+        environments on the receiving end
+    """
+
+    recognizer = sr.Recognizer()
     sound = AudioSegment.from_ogg(soundfile.name)
 
     chunks = split_on_silence(sound, min_silence_len=100, silence_thresh=sound.dBFS - 24,
@@ -51,26 +54,29 @@ async def speech_to_text(soundfile: NamedTemporaryFile) -> str:
             chunk.export(fname, format="wav")
 
             with sr.AudioFile(fname) as source:
-                aud = r.record(source)
+                aud = recognizer.record(source)
                 try:
-                    text = r.recognize_google(aud)
+                    text = recognizer.recognize_google(aud)
                     translation.append(text)
-                except sr.UnknownValueError as e:
-                    print("Translation error:", str(e))
+                except sr.UnknownValueError as error:
+                    print("Translation error:", str(error))
 
     return " ".join(translation)
 
 
 async def play_prompt_text(snd: Tuple[str, str], cfg: Audio):
+    """Play a standard prompt text, and cache the audio file for reuse."""
+
     key = snd[0]
     prompts = cfg.prompts
     txt = prompts.get(key) or snd[1]
     message_file = RECORDINGS.get(key)
     if message_file is None:
+        # pylint: disable=consider-using-with
         msg = NamedTemporaryFile(
             "wb", prefix="intercom.prompts.", suffix=".ogg", delete=False
         )
-        logger.debug(f"Generating prompt audio {key} at: {msg.name}")
+        logger.debug("Generating prompt audio %s at: %s", key, msg.name)
 
         speech = tts(txt, lang=cfg.text_lang, tld=cfg.text_accent)
         logger.debug("Saving generated speech data")
@@ -79,11 +85,13 @@ async def play_prompt_text(snd: Tuple[str, str], cfg: Audio):
         message_file = msg
         RECORDINGS[key] = message_file
 
-    logger.debug(f"Playing sound: {key} from file: {message_file.name}")
+    logger.debug("Playing sound: %s from file: %s", key, message_file.name)
     await playback_ogg(message_file.name, cfg)
 
 
 async def play_impromptu_text(text: str, cfg: Audio):
+    """Play an impromptu prompt text, without caching the audio file for reuse."""
+
     with NamedTemporaryFile(
             "wb", prefix="intercom.text.", suffix=".ogg", delete=False
     ) as msg:
@@ -91,7 +99,7 @@ async def play_impromptu_text(text: str, cfg: Audio):
         logger.debug("Saving generated speech data")
         speech.save(msg.name)
 
-        logger.debug(f"Playing sound for: '{text}' from file: {msg.name}")
+        logger.debug("Playing sound for: '%s' from file: %s", text, msg.name)
         await playback_ogg(msg.name, cfg)
         os.remove(msg.name)
 
@@ -262,14 +270,6 @@ def __write_wav(input_info: dict, channels: int, sample_width: int, data: bytes,
     _wf.writeframes(data)
 
 
-async def ding(times=1):
-    try:
-        for i in range(times):
-            print('\a')
-    except Exception as e:
-        print(str(e))
-
-
 async def record_ogg(cfg: Audio, stop_fn=None) -> NamedTemporaryFile:
     """Records from the microphone and outputs the resulting data to 'path'
     """
@@ -283,7 +283,6 @@ async def record_ogg(cfg: Audio, stop_fn=None) -> NamedTemporaryFile:
 
     pyaudio = PyAudio()
 
-    await ding()
     try:
         input_info = detect_input(pyaudio, cfg)
         if input_info is None:
@@ -293,7 +292,6 @@ async def record_ogg(cfg: Audio, stop_fn=None) -> NamedTemporaryFile:
         sample_width, data = await record_wav(pyaudio, input_info, cfg, channels, stop_fn)
         data = pack("<" + ("h" * len(data)), *data)
 
-        await ding(2)
         with wave.open(wavfile.name, mode="wb") as _wf:
             __write_wav(input_info, channels, sample_width, data, _wf)
 

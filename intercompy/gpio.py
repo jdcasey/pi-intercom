@@ -4,9 +4,9 @@ from typing import Optional
 
 from pyrogram import Client
 
+from intercompy.audio import play_impromptu_text
 from intercompy.config import Config, Rolodex
 from intercompy.convo import record_and_send
-from intercompy.audio import play_impromptu_text
 
 # pylint: disable=import-error
 LOADED_GPIO = False

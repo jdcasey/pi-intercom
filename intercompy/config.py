@@ -1,9 +1,9 @@
 """Handle configuration for intercompy bot"""
+import logging
 import os
-from typing import Optional
+from typing import Optional, List
 
 from ruamel.yaml import YAML
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -98,9 +98,9 @@ class Rolodex:
 
         return None
 
-    def get_pins(self) -> typing.List[int]:
+    def get_pins(self) -> List[int]:
         """Return the list of GPIO pins to watch"""
-        logger.debug(f"Extracting pins from: {self.data}")
+        logger.debug("Extracting pins from: %s", self.data)
         return [int(e["pin"]) for e in self.data.values()]
 
     def get_pin_target(self, pin: int) -> Optional[str]:
@@ -143,7 +143,7 @@ def load_config(config_file: str = None) -> Config:
             f"{ETC_CONFIG_FILE}"
         )
 
-    logger.debug(f"Using configuration at: {config_path}")
+    logger.info("Using configuration at: %s", config_path)
     with open(config_path, encoding="utf-8") as _f:
         data = YAML().load(_f)
 

@@ -1,9 +1,9 @@
 """Handle Telegram conversations started by others, or responses from others"""
 import logging
+import os
+from asyncio import sleep
 from tempfile import NamedTemporaryFile
 from typing import Union
-from asyncio import sleep
-import os
 
 from pyrogram import Client
 from pyrogram import filters
@@ -25,8 +25,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-
-record_your_message_file = None
 
 
 async def record_and_send(target: Union[str, int], app: Client, cfg: Config, stop_fn=None):
@@ -63,6 +61,10 @@ def setup_telegram(cfg: Config) -> Client:
 
 # pylint: disable=too-many-statements
 def format_sender_name(message: Message, cfg: Config) -> str:
+    """
+        Lookup the configured rolodex alias for a sender's first and last name, or default to that
+        given first and last name. This will format the name for text-to-speech.
+    """
     name = f"{message.from_user.first_name} {message.from_user.last_name}"
     return cfg.rolodex.get_alias(name)
 
