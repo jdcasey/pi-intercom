@@ -1,0 +1,21 @@
+---
+intercompy_telegram_default_chat: 0123456789
+
+intercompy_telegram_api_id: "01234567"
+intercompy_telegram_api_hash: "aabbccddeeff00119988223344"
+
+intercompy_telegram_session: "Use intercompy-session-setup from an installation of this software to get this."
+
+intercompy_rolodex:
+  "Somebody Cool":
+    pin: 17
+    alias: "Coolio"
+    id: "+15555555555"
+
+  "Someone Else":
+    pin: 27
+    alias: "Elsie"
+    id: "+15555555554"
+
+speaker_device: "hw:2,0"
+microphone_device: "hw:1,0"
