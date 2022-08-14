@@ -1,7 +1,6 @@
 # Python Telegram bot that can record/send audio, for use in Raspberry Pi-driven Intercoms
 
-[![Total alerts](https://img.shields.io/lgtm/alerts/g/jdcasey/pi-intercom.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/jdcasey/pi-intercom/alerts/)
-
+[![Total alerts](https://img.shields.io/lgtm/alerts/g/jdcasey/pi-intercom.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/jdcasey/pi-intercom/alerts/)[![Pylint](https://github.com/jdcasey/pi-intercom/actions/workflows/pylint.yml/badge.svg?branch=main)](https://github.com/jdcasey/pi-intercom/actions/workflows/pylint.yml)
 
 ## Non-PyPI Dependencies
 
