@@ -1,11 +1,12 @@
 """Use GPIO edges to drive recording and posting to various chats"""
-
 from asyncio import sleep
+from typing import Optional
 
 from pyrogram import Client
 
 from intercompy.config import Config, Rolodex
 from intercompy.convo import record_and_send
+from intercompy.audio import play_impromptu_text
 
 # pylint: disable=import-error
 LOADED_GPIO = False
@@ -24,29 +25,51 @@ def init_pins(cfg: Rolodex):
         print("No GPIO available. Skipping")
         return
 
-    gpio.setmode(gpio.BOARD)
-    for pin in cfg.rolodex.get_pins():
+    print(f"Detected Raspberry Pi {gpio.RPI_INFO['P1_REVISION']}.")
+
+    gpio.setwarnings(True)
+    gpio.setmode(gpio.BCM)
+    for pin in cfg.get_pins():
+        print(f"Setting up PIN #{pin} for button input")
         gpio.setup(pin, gpio.IN, pull_up_down=gpio.PUD_UP)
 
 
-async def has_edge(pin: int) -> bool:
-    """Detect a GPIO edge (high/low) to trigger recording and sending voice messages"""
-    return not gpio.input(pin)
+async def button_pushed(pin: int, cfg: Config, client: Optional[Client]):
+    target = cfg.rolodex.get_pin_target(pin)
+    print(f"PIN: {pin}, Target: {target} ({cfg.rolodex.get_pin_alias(pin)})")
+    if client and client.is_connected:
+        await record_and_send(target, client, cfg)
+    else:
+        print("Cannot send to Telegram, client is disconnected!")
+        await play_impromptu_text("Sorry. Telegram is disconnected.", cfg.audio)
 
 
-async def listen_for_pins(client: Client, cfg: Config):
+async def scan_buttons(cfg: Config, client: Optional[Client]):
+    while True:
+        for pin in cfg.rolodex.get_pins():
+            if gpio.input(pin) == 0:
+                await button_pushed(pin, cfg, client)
+
+        await sleep(0.1)
+
+
+async def listen_for_pins(client: Optional[Client], cfg: Config, loop):
     """Watch for GPIO edges, then record / send"""
     if not LOADED_GPIO:
         return
 
-    while True:
-        if client.is_connected:
-            for pin in cfg.rolodex.get_pins():
-                if await has_edge(pin):
-                    target = cfg.rolodex.get_pin_target(pin)
-                    print(f"PIN: {pin}, Target: {target}")
-                    await record_and_send(target, client, cfg)
+    loop.create_task(scan_buttons(cfg, client))
+    print("Listening for button input...")
 
-            await sleep(0.01)
-        else:
-            await sleep(1)
+    # def gpio_event(arg: int):
+    #     print(f"GPIO event had arg: {arg}")
+    #     loop.create_task(button_pushed(arg, cfg, client))
+    #
+    #
+    # for pin in cfg.rolodex.get_pins():
+    #     gpio.add_event_detect(
+    #         pin,
+    #         gpio.FALLING,
+    #         callback=gpio_event,
+    #         bouncetime=500
+    #     )

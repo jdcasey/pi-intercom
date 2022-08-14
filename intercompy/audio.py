@@ -1,6 +1,7 @@
 """
 Capture and play audio for use with Telegram. Uses ffmpeg for recording and vlc for playback.
 """
+from asyncio import sleep
 import logging
 import os
 import wave
@@ -11,14 +12,13 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import Tuple
 
 from gtts import gTTS as tts
-from playsound import playsound
 
 import speech_recognition as sr
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
 
 import ffmpy
-from beepy import beep
+import vlc
 from pyaudio import PyAudio, paInt16
 
 from intercompy.config import Audio
@@ -70,14 +70,17 @@ async def play_prompt_text(snd: Tuple[str, str], cfg: Audio):
         msg = NamedTemporaryFile(
             "wb", prefix="intercom.prompts.", suffix=".ogg", delete=False
         )
+        logger.debug(f"Generating prompt audio {key} at: {msg.name}")
 
         speech = tts(txt, lang=cfg.text_lang, tld=cfg.text_accent)
+        logger.debug("Saving generated speech data")
         speech.save(msg.name)
 
         message_file = msg
         RECORDINGS[key] = message_file
 
-    playsound(message_file.name)
+    logger.debug(f"Playing sound: {key} from file: {message_file.name}")
+    await playback_ogg(message_file.name, cfg)
 
 
 async def play_impromptu_text(text: str, cfg: Audio):
@@ -85,10 +88,12 @@ async def play_impromptu_text(text: str, cfg: Audio):
             "wb", prefix="intercom.text.", suffix=".ogg", delete=False
     ) as msg:
         speech = tts(text, lang=cfg.text_lang, tld=cfg.text_accent)
+        logger.debug("Saving generated speech data")
         speech.save(msg.name)
 
-        playsound(msg.name)
-        os.remove(msg)
+        logger.debug(f"Playing sound for: '{text}' from file: {msg.name}")
+        await playback_ogg(msg.name, cfg)
+        os.remove(msg.name)
 
 
 def is_silent(snd_data: array, cfg: Audio) -> bool:
@@ -310,8 +315,21 @@ async def record_ogg(cfg: Audio, stop_fn=None) -> NamedTemporaryFile:
         os.remove(wavfile.name)
 
 
-
-def playback_ogg(filename: str, cfg: Audio):
+async def playback_ogg(filename: str, cfg: Audio):
     """ Play an .ogg file
     """
-    playsound(filename)
+    _v = vlc.Instance("--aout=alsa")
+    _p = _v.media_player_new()
+    vlc.libvlc_audio_set_volume(_p, cfg.volume)
+
+    _m = _v.media_new(filename)
+    _p.set_media(_m)
+    _p.play()
+
+    finished = False
+    while not finished:
+        state = _p.get_state()
+        if state in (vlc.State.Ended, vlc.State.Error, vlc.State.Stopped):
+            finished = True
+
+        await sleep(0.5)

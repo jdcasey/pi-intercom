@@ -1,6 +1,6 @@
 """Command-line interface for intercompy"""
 import logging
-from asyncio import gather, get_event_loop, sleep
+from asyncio import gather, new_event_loop, set_event_loop, sleep
 
 import click
 from pyrogram import Client
@@ -10,10 +10,25 @@ import select
 import tty
 import termios
 
+from intercompy import selftest
+from intercompy.util import setup_session
 from intercompy.config import load_config, Config
 from intercompy.convo import start_telegram, setup_telegram, record_and_send
 
 from intercompy.gpio import init_pins, listen_for_pins
+
+
+def boot(config_file: str = None, debug: bool = False) -> Config:
+    log_level = logging.INFO
+    if debug:
+        log_level = logging.DEBUG
+
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=log_level
+    )
+
+    print("Loading intercom configuration")
+    return load_config(config_file)
 
 
 async def has_edge():
@@ -41,34 +56,49 @@ async def listen_for_keyboard(client: Client, cfg: Config, use_keyboard: bool):
 
 @click.command()
 @click.option("--config-file", "-f", help="Alternative config YAML")
+def session_setup(config_file: str = None):
+    """Interactively setup a new Telegram session for storage in config.yaml"""
+    cfg = boot(config_file, True)
+    setup_session(cfg)
+
+
+@click.command()
+@click.option("--config-file", "-f", help="Alternative config YAML")
+def selftest_gpio(config_file: str = None):
+    """Self-test the GPIO functions, including a text-to-audio prompting test"""
+    cfg = boot(config_file, True)
+    selftest.test_gpio(cfg)
+
+
+@click.command()
+@click.option("--config-file", "-f", help="Alternative config YAML")
 @click.option("--debug", "-d", is_flag=True, help="Turn on debug logging")
 @click.option("--keyboard", "-k", is_flag=True, help="Turn on keyboard recording trigger")
 def run(config_file: str = None, keyboard: bool = False, debug: bool = False):
     """Start the bot listening for intercom messages"""
-    log_level = logging.INFO
-    if debug:
-        log_level = logging.DEBUG
+    loop = new_event_loop()
+    set_event_loop(loop)
 
-    logging.basicConfig(
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=log_level
-    )
+    cfg = boot(config_file, debug)
 
-    cfg = load_config(config_file)
-
+    print("Setting up Telegram client")
     app = setup_telegram(cfg)
+
+    print("Setting up hardware buttons")
     init_pins(cfg.rolodex)
 
-    old_term_settings = termios.tcgetattr(sys.stdin)
-    try:
-        if keyboard:
-            tty.setcbreak(sys.stdin.fileno())
+    # old_term_settings = termios.tcgetattr(sys.stdin)
+    # try:
+    # if keyboard:
+    #     print("Setting up keyboard input")
+    #     tty.setcbreak(sys.stdin.fileno())
 
-        gather(
-            start_telegram(app, cfg),
-            listen_for_keyboard(app, cfg, keyboard),
-            listen_for_pins(app, cfg)
-        )
-        get_event_loop().run_forever()
-    finally:
-        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_term_settings)
+    gather(
+        start_telegram(app, cfg),
+        # listen_for_keyboard(app, cfg, keyboard),
+        listen_for_pins(app, cfg, loop)
+    )
+    loop.run_forever()
+    # finally:
+    #     termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_term_settings)
 

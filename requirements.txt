@@ -5,7 +5,7 @@ ruamel.yaml
 click
 
 # pin / button triggers, LED output, etc. (gpio.py)
-gpiozero
+RPi.GPIO
 
 # keyboard detection, simulating GPIO input (command.py)
 #termios
@@ -17,12 +17,11 @@ tgcrypto
 # audio recording (audio.py)
 pyaudio
 ffmpy
-beepy
 
 # text to speech (audio.py)
-gTTs
+gtts
 pyttsx3
-playsound
+python-vlc
 
 # speech to text (audio.py)
 SpeechRecognition

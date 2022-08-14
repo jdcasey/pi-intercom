@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 
 deps = []
-with open("requirements.txt") as f:
+with open("requirements.in.txt") as f:
     for line in f.readlines():
         line = line.strip()
         if len(line) > 0 and not line.startswith("#"):
@@ -31,7 +31,9 @@ setup(
     test_suite="tests",
     entry_points={
       'console_scripts': [
-        'intercom = intercompy:run'
+        'intercom = intercompy:run',
+        'intercompy-test-gpio = intercompy:selftest_gpio',
+        'intercompy-session-setup = intercompy:session_setup'
       ],
     }
 )

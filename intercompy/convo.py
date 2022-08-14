@@ -43,7 +43,7 @@ async def record_and_send(target: Union[str, int], app: Client, cfg: Config, sto
         await app.send_voice(target, _f)
 
     txt = await speech_to_text(oggfile)
-    await app.send_message(f"Text translation: {txt}")
+    await app.send_message(target, f"Text translation: {txt}")
     os.remove(oggfile.name)
 
 
@@ -57,6 +57,7 @@ async def goodbye(app: Client, cfg: Telegram, sig, frame):
 def setup_telegram(cfg: Config) -> Client:
     """Setup the telegram client. This is just a convenience to provide a bit of encapsulation."""
     # , cfg.telegram.api_id, cfg.telegram.api_hash)
+    logger.debug("Setting up Telegram client...")
     return Client(cfg.telegram.account_name, session_string=cfg.telegram.session)
 
 
@@ -137,7 +138,7 @@ async def start_telegram(app: Client, cfg: Config):
                 infile = temp.name
                 print(f"Wrote: {infile}")
 
-                playback_ogg(temp.name, cfg.audio)
+                await playback_ogg(temp.name, cfg.audio)
 
                 os.remove(temp.name)
 
@@ -150,8 +151,10 @@ async def start_telegram(app: Client, cfg: Config):
                 f"Message reads: {message.text}",
                 cfg.audio)
 
+    logger.debug("Starting Telegram client")
     await app.start()
     _me = await app.get_me()
+    logger.debug("Playing online sound")
     await play_prompt_text(SND_INTERCOM_ONLINE, cfg.audio)
     logger.debug("Sending hello to %s", cfg.telegram.chat)
     await app.send_message(cfg.telegram.chat, f"{_me.username} is online 🎉")

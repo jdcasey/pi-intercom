@@ -4,7 +4,9 @@ import typing
 from typing import Optional
 
 from ruamel.yaml import YAML
+import logging
 
+logger = logging.getLogger(__name__)
 
 ETC_CONFIG_FILE = "/etc/intercompy/config.yaml"
 HOME_CONFIG_FILE = os.path.join(
@@ -36,30 +38,6 @@ GPIO_SECTION = "pin-targets"
 DEFAULT_VOLUME = 75
 DEFAULT_WAV_THRESHOLD = 500
 DEFAULT_WAV_SILENCE_THRESHOLD = 30
-
-
-def load_config(config_file: str = None):
-    """
-    Load configuration, starting with the specified file if available.
-    If not, try to load from one of two standard locations, in the
-    following order of precedence:
-        $HOME/.config/intercompy/config.yaml
-        /etc/intercompy/config.yaml
-    """
-    config_path = config_file or HOME_CONFIG_FILE
-    if os.path.exists(config_path) is not True:
-        config_path = ETC_CONFIG_FILE
-
-    if os.path.exists(config_path) is not True:
-        raise Exception(
-            f"No configuration defined for intercompy in {config_file} or {HOME_CONFIG_FILE} or "
-            f"{ETC_CONFIG_FILE}"
-        )
-
-    with open(config_path, encoding="utf-8") as _f:
-        data = YAML().load(_f)
-
-    return Config(data)
 
 
 # pylint: disable=too-few-public-methods
@@ -101,6 +79,7 @@ class Rolodex:
     """Contain configuration related to intercom chat members"""
     def __init__(self, data: dict):
         if data is None:
+            logger.debug("rolodex data is None. Using empty dict.")
             data = {}
 
         self.data = data
@@ -112,8 +91,17 @@ class Rolodex:
 
         return name
 
+    def get_pin_alias(self, pin: int) -> str:
+        """Return the registered alias for the pin, or else the name itself"""
+        for name, entry in self.data.items():
+            if int(entry["pin"]) == pin:
+                return entry["alias"] or name
+
+        return None
+
     def get_pins(self) -> typing.List[int]:
         """Return the list of GPIO pins to watch"""
+        logger.debug(f"Extracting pins from: {self.data}")
         return [int(e["pin"]) for e in self.data.values()]
 
     def get_pin_target(self, pin: int) -> Optional[str]:
@@ -136,3 +124,28 @@ class Config:
         self.telegram = Telegram(data.get(TELEGRAM_SECTION))
         self.audio = Audio(data.get(AUDIO_SECTION))
         self.rolodex = Rolodex(data.get(ROLODEX))
+
+
+def load_config(config_file: str = None) -> Config:
+    """
+    Load configuration, starting with the specified file if available.
+    If not, try to load from one of two standard locations, in the
+    following order of precedence:
+        $HOME/.config/intercompy/config.yaml
+        /etc/intercompy/config.yaml
+    """
+    config_path = config_file or HOME_CONFIG_FILE
+    if os.path.exists(config_path) is not True:
+        config_path = ETC_CONFIG_FILE
+
+    if os.path.exists(config_path) is not True:
+        raise Exception(
+            f"No configuration defined for intercompy in {config_file} or {HOME_CONFIG_FILE} or "
+            f"{ETC_CONFIG_FILE}"
+        )
+
+    logger.debug(f"Using configuration at: {config_path}")
+    with open(config_path, encoding="utf-8") as _f:
+        data = YAML().load(_f)
+
+    return Config(data)

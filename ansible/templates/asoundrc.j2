@@ -1,0 +1,17 @@
+pcm.!default {
+  type asym
+  playback.pcm "speakers"
+  capture.pcm "mic"
+}
+pcm.speakers {
+  type plug
+  slave {
+    pcm "{{speaker_device}}"
+  }
+}
+pcm.mic {
+  type plug
+  slave {
+    pcm "{{microphone_device}}"
+  }
+}
