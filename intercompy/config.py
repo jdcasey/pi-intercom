@@ -45,6 +45,7 @@ DEFAULT_WAV_SILENCE_THRESHOLD = 30
 
 
 # pylint: disable=too-few-public-methods
+# pylint: disable=too-many-instance-attributes
 class Audio:
     """Contain config options for audio input / output"""
 
@@ -98,8 +99,8 @@ class Telegram:
             )
 
         else:
-            with open(self.session_file) as f:
-                self.session = str(f.read()).strip()
+            with open(self.session_file, encoding="utf-8") as fhandle:
+                self.session = str(fhandle.read()).strip()
 
         self.chat = data.get(CHAT)
 

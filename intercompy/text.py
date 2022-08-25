@@ -1,7 +1,7 @@
 """Text enhancement and analysis utilities"""
-import nltk
-
 from logging import getLogger
+
+import nltk
 
 from .config import Audio
 

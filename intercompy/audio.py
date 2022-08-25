@@ -51,8 +51,8 @@ RECORDINGS = {}
 
 def setup_audio(cfg: Audio):
     """Pre-record all prompts at startup to avoid lag when messaging."""
-    for p in PROMPTS:
-        record_prompt(p, cfg)
+    for prompt in PROMPTS:
+        record_prompt(prompt, cfg)
 
 
 async def speech_to_text(soundfile: NamedTemporaryFile) -> str:
@@ -86,6 +86,8 @@ async def speech_to_text(soundfile: NamedTemporaryFile) -> str:
 
 
 def record_prompt(snd: Tuple[str, str], cfg: Audio) -> str:
+    """Record a standard audio prompt for a given text directive, for later use"""
+
     # pylint: disable=consider-using-with
     key = snd[0]
 
@@ -139,6 +141,7 @@ async def play_impromptu_text(text: str, cfg: Audio):
 async def record_ogg(cfg: Audio, stop_fn=None) -> NamedTemporaryFile:
     """Records from the microphone and outputs the resulting data to 'path'"""
 
+    # pylint: disable=consider-using-with
     oggfile = NamedTemporaryFile(
         "wb", prefix="intercom.voice-out.", suffix=".ogg", delete=False
     )

@@ -19,8 +19,8 @@ async def setup_session(cfg: Config):
     app = Client(":memory:", api_id=api_id, api_hash=api_hash)
     await app.start()
     try:
-        with open(tel.session_file, "w") as f:
+        with open(tel.session_file, "w", encoding="utf-8") as fhandle:
             session = await app.export_session_string()
-            f.write(session)
+            fhandle.write(session)
     finally:
         await app.stop()
