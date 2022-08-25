@@ -4,9 +4,9 @@ from typing import Optional
 
 from pyrogram import Client
 
-from intercompy.audio import play_impromptu_text
-from intercompy.config import Config, Rolodex
-from intercompy.convo import record_and_send
+from .audio import play_impromptu_text
+from .config import Config, Rolodex
+from .convo import record_and_send
 
 # pylint: disable=import-error
 LOADED_GPIO = False
@@ -36,8 +36,8 @@ def init_pins(cfg: Rolodex):
 
 async def button_pushed(pin: int, cfg: Config, client: Optional[Client]):
     """
-        When a rolodex button is pushed, respond appropriately based on whether Telegram is
-        available.
+    When a rolodex button is pushed, respond appropriately based on whether Telegram is
+    available.
     """
     target = cfg.rolodex.get_pin_target(pin)
     print(f"PIN: {pin}, Target: {target} ({cfg.rolodex.get_pin_alias(pin)})")

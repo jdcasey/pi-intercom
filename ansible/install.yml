@@ -4,6 +4,7 @@
   vars:
     install_dir: /home/pi/intercompy
     config_dir: /home/pi/.config/intercompy
+    state_dir: /home/pi/.local/state/intercompy
 
   tasks:
     - name: install packages
@@ -11,6 +12,8 @@
       apt:
         name: '{{ packages }}'
         state: latest
+      async: 3600
+      poll: 5
       vars:
         packages:
           - python3-pip
@@ -28,6 +31,7 @@
           - vlc # Audio playback
       tags:
         - never
+        - first
         - update
 
     - name: setup intercompy directories
@@ -41,8 +45,12 @@
         - "{{install_dir}}"
         - "{{install_dir}}/intercompy"
         - "{{config_dir}}"
+        - "{{state_dir}}"
       tags:
-        - always
+        - never
+        - first
+        - update
+        - code
 
     - name: copy setup.py
       ansible.builtin.copy:
@@ -55,9 +63,13 @@
       loop:
         - setup.py
         - requirements.in.txt
-        - session_setup.py
       tags:
-        - always
+        - never
+        - first
+        - update
+        - code
+      notify:
+        - restart intercompy
 
     - name: copy module files
       ansible.builtin.copy:
@@ -70,17 +82,43 @@
       with_fileglob:
         - "{{playbook_dir}}/../intercompy/*.py"
       tags:
-        - always
+        - never
+        - first
+        - update
+        - code
+      notify:
+        - restart intercompy
+
+    - name: install pyrogram and tgcrypto
+      become: true
+      ansible.builtin.pip:
+        name: "{{ item }}"
+      async: 3600
+      poll: 5
+      tags:
+        - never
+        - first
+        - update
+      loop:
+        - pyrogram
+        - tgcrypto
 
     - name: install intercompy
       ansible.builtin.pip:
         chdir: "{{install_dir}}"
         virtualenv: "{{install_dir}}/venv"
         virtualenv_site_packages: yes
-        virtualenv_command: "/usr/bin/python3 -m venv"
+        virtualenv_command: "/usr/bin/python3 -m venv --system-site-packages"
         name: 'file://{{install_dir}}'
+      async: 3600
+      poll: 5
       tags:
-        - always
+        - never
+        - first
+        - update
+        - code
+      notify:
+        - restart intercompy
 
     - name: install configuration
       ansible.builtin.template:
@@ -90,13 +128,32 @@
         group: pi
         mode: '0600'
       tags:
-        - always
+        - never
+        - first
+        - config
       loop:
         - src: templates/config.yaml.j2
           dest: "{{config_dir}}/config.yaml"
+      notify:
+        - restart intercompy
+
+    - name: install Alsa configuration
+      ansible.builtin.template:
+        src: "{{item.src}}"
+        dest: "{{item.dest}}"
+        owner: pi
+        group: pi
+        mode: '0600'
+      tags:
+        - never
+        - first
+        - config
+      when: "config_alsa|bool|default(false)"
+      loop:
         - src: templates/asoundrc.j2
           dest: "/home/pi/.asoundrc"
-
+      notify:
+        - restart intercompy
 
     - name: install systemd service
       become: true
@@ -107,7 +164,10 @@
         group: root
         mode: '0644'
       tags:
-        - always
+        - never
+        - first
+        - update
+        - code
       notify:
         - restart intercompy
 

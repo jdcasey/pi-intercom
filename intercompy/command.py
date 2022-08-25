@@ -4,11 +4,12 @@ from asyncio import gather, new_event_loop, set_event_loop
 
 import click
 
-from intercompy import selftest
-from intercompy.config import load_config, Config
-from intercompy.convo import start_telegram, setup_telegram
-from intercompy.gpio import init_pins, listen_for_pins
-from intercompy.util import setup_session
+from . import selftest
+from .audio import setup_audio
+from .config import load_config, Config
+from .convo import start_telegram, setup_telegram
+from .gpio import init_pins, listen_for_pins
+from .util import setup_session
 
 
 def _boot(config_file: str = None, debug: bool = False) -> Config:
@@ -31,7 +32,7 @@ def _boot(config_file: str = None, debug: bool = False) -> Config:
 def session_setup(config_file: str = None):
     """Interactively setup a new Telegram session for storage in config.yaml"""
     cfg = _boot(config_file, True)
-    setup_session(cfg)
+    new_event_loop().run_until_complete(setup_session(cfg))
 
 
 @click.command()
@@ -58,8 +59,9 @@ def run(config_file: str = None, debug: bool = False):
     print("Setting up hardware buttons")
     init_pins(cfg.rolodex)
 
-    gather(
-        start_telegram(app, cfg),
-        listen_for_pins(app, cfg, loop)
-    )
+    print("Setting up audio prompts")
+    setup_audio(cfg.audio)
+
+    gather(start_telegram(app, cfg), listen_for_pins(app, cfg, loop))
+
     loop.run_forever()

@@ -1,16 +1,26 @@
 ---
 audio:
-  device: {{intercompy_device|default(0)}}
+  device: {{intercompy_microphone_device|mandatory}}
+  wav-threshold: {{intercompy_wav_threshold|default(1000)}}
   wav-silence-threshold: {{intercompy_wav_silence_threshold|default(10)}}
+
+  {%if intercompy_txt_msg_line_ending is defined%}text-message-line-ending: "{{intercompy_txt_msg_line_ending}}"
+  {%endif%}
+
+  text-accent: {{intercompy_accent|default("com")}}
 
 telegram:
   chat: {{intercompy_telegram_default_chat|mandatory}}
   
   api-id: {{intercompy_telegram_api_id|mandatory}}
-  api-hash: {{intercompy_telegram_api_hash|mandatory}}
-
-  session: {{intercompy_telegram_session|mandatory}}
+  api-hash: "{{intercompy_telegram_api_hash|mandatory}}"
 
 rolodex:
-  {{intercompy_rolodex|mandatory|to_nice_yaml(indent=2)}}
+{%for key,data in intercompy_rolodex.items()%}
+  "{{key}}":
+  {%for k,v in data.items()%}  {{k}}: {%if v|int != 0%}{{v}}{%else%}"{{v}}"{%endif%}
+
+  {%endfor%}
+
+{%endfor%}
 

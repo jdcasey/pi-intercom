@@ -2,19 +2,25 @@
 Run various kinds utilities associated with the intercom, but not part of main operation.
 For example, setting up a Telegram session string.
 """
-import os
+from os import getenv
 
 from pyrogram import Client
 
-from intercompy.config import Config
+from .config import Config
 
 
-def setup_session(cfg: Config):
+async def setup_session(cfg: Config):
     """Interactive means of establishing a Telegram session, for use in the config.yaml file"""
 
-    api_id = os.getenv("API_ID") or cfg.telegram.api_id
-    api_hash = os.getenv("API_HASH") or cfg.telegram.api_hash
+    tel = cfg.telegram
+    api_id = getenv("API_ID") or tel.api_id
+    api_hash = getenv("API_HASH") or tel.api_hash
 
-    with Client(":memory:", api_id=api_id, api_hash=api_hash) as app:
-        print("Paste this into your config.yaml file:\n\n"
-              f"telegram:\n\n  session: \"{app.export_session_string()}\"\n\n\n")
+    app = Client(":memory:", api_id=api_id, api_hash=api_hash)
+    await app.start()
+    try:
+        with open(tel.session_file, "w") as f:
+            session = await app.export_session_string()
+            f.write(session)
+    finally:
+        await app.stop()

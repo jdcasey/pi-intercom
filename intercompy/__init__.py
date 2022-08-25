@@ -1,7 +1,7 @@
 """
 Module for running an intercom, with send/recv of audio via Telegram.
 """
-from intercompy.command import run, selftest_gpio, session_setup
+from .command import run, selftest_gpio, session_setup
 
 __version__ = "0.0.1"
 

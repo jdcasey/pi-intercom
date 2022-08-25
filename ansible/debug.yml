@@ -1,0 +1,21 @@
+- hosts: intercoms
+  remote_user: pi
+
+  vars:
+    install_dir: /home/pi/intercompy
+    config_dir: /home/pi/.config/intercompy
+    state_dir: /home/pi/.local/state/intercompy
+
+    config_dest: "/tmp/{{hostname}}.config.yaml"
+
+  tasks:
+    - name: "Print configuration for host"
+      ansible.builtin.template:
+        src: templates/config.yaml.j2
+        dest: "{{config_dest}}"
+      delegate_to: localhost
+
+    - name: "Show config file path"
+      ansible.builtin.debug:
+        msg: "Wrote: {{config_dest}}"
+      delegate_to: localhost

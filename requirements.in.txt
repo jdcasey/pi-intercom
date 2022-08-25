@@ -26,3 +26,6 @@ python-vlc
 # speech to text (audio.py)
 SpeechRecognition
 pydub
+
+# test processing
+nltk
