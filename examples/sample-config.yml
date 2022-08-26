@@ -1,0 +1,30 @@
+---
+audio:
+  device: 2
+  wav-threshold: 1000
+  wav-silence-threshold: 10
+
+  # introduce a real old-timey telegram feel between sentences.
+  text-message-line-ending: ". STOP."
+
+  text-accent: com
+
+telegram:
+  chat: 000111222333
+
+  api-id: <API_ID>
+  api-hash: <API_HASH>
+
+rolodex:
+  "James User":
+    pin: 17
+    volume: 110
+    alias: "Jimmy"
+    id: "@someuser"
+
+  "Emily User":
+    pin: 27
+    alias: "Em"
+    id: "@anotheruser"
+
+
