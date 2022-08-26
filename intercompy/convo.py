@@ -181,7 +181,7 @@ async def start_telegram(app: Client, cfg: Config):
                 suffix="." + fext,
                 delete=False,
             ) as temp:
-                _fpath = await message.download(file_name=temp.name)
+                await message.download(file_name=temp.name)
 
                 await playback_ogg(
                     temp.name, cfg.audio, get_sender_volume(message, cfg)
