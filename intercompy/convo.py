@@ -5,7 +5,7 @@ from asyncio import sleep
 from tempfile import NamedTemporaryFile
 from typing import Union
 
-from opentelemetry import trace
+import opentelemetry
 from pyrogram import Client
 from pyrogram import filters
 from pyrogram.types import Message
@@ -171,8 +171,8 @@ async def start_telegram(app: Client, cfg: Config):
     @trace
     async def play_voice_message(_client: Client, message: Message):
         """Play a received voice message"""
-        trace.get_current_span().set_attribute("voice.present",
-                                               1 if message.voice is not None else 0)
+        opentelemetry.trace.get_current_span().set_attribute("voice.present",
+                                                             1 if message.voice is not None else 0)
 
         if message.voice is not None:
             await play_impromptu_text(
@@ -199,8 +199,8 @@ async def start_telegram(app: Client, cfg: Config):
     @trace
     async def play_prompt_text_message(_client: Client, message: Message):
         """Play a received voice message"""
-        trace.get_current_span().set_attribute("text.present",
-                                               1 if message.text is not None else 0)
+        opentelemetry.trace.get_current_span().set_attribute("text.present",
+                                                             1 if message.text is not None else 0)
 
         if message.text is not None:
             formatted_txt = await format_inbound_message_for_speech(message.text, cfg.audio)

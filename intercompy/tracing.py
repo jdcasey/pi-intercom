@@ -8,7 +8,8 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 from intercompy.config import Tracing
 
-global tracing_config
+# pylint: disable=global-at-module-level
+global TRACING_CONFIG
 
 
 def setup_tracing(cfg: Tracing):
@@ -21,8 +22,8 @@ def setup_tracing(cfg: Tracing):
     provider.add_span_processor(processor)
     opentelemetry.trace.set_tracer_provider(provider)
 
-    global tracing_config
-    tracing_config = cfg
+    global TRACING_CONFIG
+    TRACING_CONFIG = cfg
 
     RequestsInstrumentor().instrument()
 
@@ -39,7 +40,7 @@ def trace(func):
         tracer = get_tracer()
         with tracer.start_as_current_span(func.__name__, attributes={
             "service.name": "intercompy",
-            "intercom.name": tracing_config.intercom_name
+            "intercom.name": TRACING_CONFIG.intercom_name
         }):
             return func(*args, **kwargs)
 

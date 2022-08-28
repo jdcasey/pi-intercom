@@ -60,7 +60,7 @@ async def button_pushed(pin: int, cfg: Config, client: Optional[Client]):
 
     print(f"PIN: {pin}, Target: {target} ({cfg.rolodex.get_pin_alias(pin)})")
     if client and client.is_connected:
-            await record_and_send(target, client, cfg)
+        await record_and_send(target, client, cfg)
     else:
         print("Cannot send to Telegram, client is disconnected!")
         await play_impromptu_text("Sorry. Telegram is disconnected.", cfg.audio)

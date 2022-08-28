@@ -1,7 +1,6 @@
 """Command-line interface for intercompy"""
 import logging
 from asyncio import gather, new_event_loop, set_event_loop
-import opentelemetry
 
 import click
 
@@ -10,8 +9,8 @@ from intercompy.audio import setup_audio
 from intercompy.config import load_config, Config
 from intercompy.convo import start_telegram, setup_telegram
 from intercompy.gpio import init_pins, listen_for_pins
-from intercompy.util import setup_session
 from intercompy.tracing import setup_tracing, trace, get_tracer
+from intercompy.util import setup_session
 
 
 def _boot(config_file: str = None, debug: bool = False) -> Config:
