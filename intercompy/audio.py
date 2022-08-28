@@ -15,11 +15,13 @@ import ffmpy
 import speech_recognition as sr
 import vlc
 from gtts import gTTS as tts
+import opentelemetry
 from pyaudio import PyAudio, paInt16
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
 
-from .config import Audio
+from intercompy.config import Audio
+from intercompy.tracing import trace, get_tracer
 
 WAV_FORMAT = paInt16
 WAV_CHUNK_SIZE = 4096
@@ -55,6 +57,7 @@ def setup_audio(cfg: Audio):
         record_prompt(prompt, cfg)
 
 
+@trace
 async def speech_to_text(soundfile: NamedTemporaryFile) -> str:
     """
     Transform a recorded voice to text for sending separately, to help in high-noise
@@ -85,10 +88,10 @@ async def speech_to_text(soundfile: NamedTemporaryFile) -> str:
     return " ".join(translation)
 
 
+@trace
 def record_prompt(snd: Tuple[str, str], cfg: Audio) -> str:
     """Record a standard audio prompt for a given text directive, for later use"""
 
-    # pylint: disable=consider-using-with
     key = snd[0]
 
     prompts_dir = os.path.join(
@@ -99,12 +102,19 @@ def record_prompt(snd: Tuple[str, str], cfg: Audio) -> str:
 
     fname = os.path.join(prompts_dir, f"intercom.prompt.{key}.ogg")
 
+    opentelemetry.trace.get_current_span().set_attributes({
+        "recording.key": key,
+        "recording.path": fname,
+        "recording.exists": os.path.exists(fname)
+    })
     if not os.path.exists(fname):
         logger.debug("Generating prompt audio %s at: %s", key, fname)
 
         prompts = cfg.prompts
         txt = prompts.get(key) or snd[1]
-        speech = tts(txt, lang=cfg.text_lang, tld=cfg.text_accent)
+        with get_tracer().start_as_current_span("audio.text-to-speech"):
+            speech = tts(txt, lang=cfg.text_lang, tld=cfg.text_accent)
+
         logger.debug("Saving generated speech data for: %s", key)
         speech.save(fname)
 
@@ -112,6 +122,7 @@ def record_prompt(snd: Tuple[str, str], cfg: Audio) -> str:
     return fname
 
 
+@trace
 async def play_prompt_text(snd: Tuple[str, str], cfg: Audio):
     """Play a standard prompt text, and cache the audio file for reuse."""
 
@@ -124,13 +135,16 @@ async def play_prompt_text(snd: Tuple[str, str], cfg: Audio):
     await playback_ogg(message_file, cfg)
 
 
+@trace
 async def play_impromptu_text(text: str, cfg: Audio):
     """Play an impromptu prompt text, without caching the audio file for reuse."""
 
     with NamedTemporaryFile(
-        "wb", prefix="intercom.text.", suffix=".ogg", delete=True
+            "wb", prefix="intercom.text.", suffix=".ogg", delete=True
     ) as msg:
-        speech = tts(text, lang=cfg.text_lang, tld=cfg.text_accent)
+        with get_tracer().start_as_current_span("audio.text-to-speech"):
+            speech = tts(text, lang=cfg.text_lang, tld=cfg.text_accent)
+
         logger.debug("Saving generated speech data")
         speech.save(msg.name)
 
@@ -138,8 +152,22 @@ async def play_impromptu_text(text: str, cfg: Audio):
         await playback_ogg(msg.name, cfg)
 
 
+@trace
 async def record_ogg(cfg: Audio, stop_fn=None) -> NamedTemporaryFile:
     """Records from the microphone and outputs the resulting data to 'path'"""
+
+    @trace
+    def to_ogg():
+        opentelemetry.trace.get_current_span().set_attribute("wav-size",
+                                                             os.path.getsize(wavfile.name))
+
+        ffmpeg = ffmpy.FFmpeg(
+            inputs={wavfile.name: None}, outputs={oggfile.name: ["-y", "-f", "ogg"]}
+        )
+        ffmpeg.run()
+
+        opentelemetry.trace.get_current_span().set_attribute("ogg-size",
+                                                             os.path.getsize(oggfile.name))
 
     # pylint: disable=consider-using-with
     oggfile = NamedTemporaryFile(
@@ -163,7 +191,7 @@ async def record_ogg(cfg: Audio, stop_fn=None) -> NamedTemporaryFile:
         print("pyaudio terminated")
 
     with NamedTemporaryFile(
-        "wb", prefix="intercom.voice-out.", suffix=".wav"
+            "wb", prefix="intercom.voice-out.", suffix=".wav"
     ) as wavfile:
         logger.debug("Packing WAV data")
         data = pack("<" + ("h" * len(data)), *data)
@@ -175,17 +203,18 @@ async def record_ogg(cfg: Audio, stop_fn=None) -> NamedTemporaryFile:
         await play_prompt_text(SND_PROCESSING_RECORDING, cfg)
 
         logger.info("Converting WAV to OGG")
-        ffmpeg = ffmpy.FFmpeg(
-            inputs={wavfile.name: None}, outputs={oggfile.name: ["-y", "-f", "ogg"]}
-        )
-        ffmpeg.run()
+        to_ogg()
+
         logger.info("OGG file recorded to: %s", oggfile.name)
 
         return oggfile
 
 
+@trace
 async def playback_ogg(filename: str, cfg: Audio, vol_override: Optional[int] = None):
     """Play an .ogg file"""
+    opentelemetry.trace.get_current_span().set_attribute("ogg-size", os.path.getsize(filename))
+
     vol = vol_override or cfg.volume
 
     _v = vlc.Instance("--aout=alsa")
@@ -200,6 +229,7 @@ async def playback_ogg(filename: str, cfg: Audio, vol_override: Optional[int] = 
     while not finished:
         state = _p.get_state()
         if state in (vlc.State.Ended, vlc.State.Error, vlc.State.Stopped):
+            opentelemetry.trace.get_current_span().set_attribute("vlc-end-state", state)
             finished = True
 
         await sleep(0.5)
@@ -251,6 +281,7 @@ def _is_valid_input(dev) -> bool:
     return 0 < in_channels < 3
 
 
+@trace
 def _detect_input(pyaudio: PyAudio, cfg: Audio) -> dict:
     """
     Find the audio input device
@@ -260,17 +291,23 @@ def _detect_input(pyaudio: PyAudio, cfg: Audio) -> dict:
     device_name = None
     device_index = None
     if isinstance(device, str):
+        opentelemetry.trace.get_current_span().set_attribute("configured-device-name",
+                                                             cfg.audio_device)
         device_name = device
     else:
+        opentelemetry.trace.get_current_span().set_attribute("configured-device-index",
+                                                             cfg.audio_device)
         device_index = device
 
     input_info = pyaudio.get_default_input_device_info()
     device_count = pyaudio.get_device_count()
 
+    opentelemetry.trace.get_current_span().set_attribute("audio-device-count", device_count)
+
     if (
-        input_info is None
-        and device_index is not None
-        and device_index < device_count - 1
+            input_info is None
+            and device_index is not None
+            and device_index < device_count - 1
     ):
         dev = pyaudio.get_device_info_by_index(int(device_index))
         if _is_valid_input(dev):
@@ -290,14 +327,19 @@ def _detect_input(pyaudio: PyAudio, cfg: Audio) -> dict:
                     break
 
     if input_info is None:
+        opentelemetry.trace.get_current_span().set_attribute("detected-input", 0)
         logger.error("No valid input devices found!")
+    else:
+        opentelemetry.trace.get_current_span().set_attribute("detected-input",
+                                                             input_info.get("index"))
 
     logger.info("Recording using device: %s", input_info)
     return input_info
 
 
+@trace
 async def _record_wav(
-    pyaudio: PyAudio, input_info: dict, cfg: Audio, channels: int, stop_fn=None
+        pyaudio: PyAudio, input_info: dict, cfg: Audio, channels: int, stop_fn=None
 ) -> Tuple[int, array]:
     """
     Record a word or words from the microphone and
@@ -308,73 +350,94 @@ async def _record_wav(
     blank sound to make sure VLC et al can play
     it without getting chopped off.
     """
-    logger.info("Opening pyAudio stream")
-    stream = pyaudio.open(
-        format=WAV_FORMAT,
-        channels=channels,
-        rate=int(input_info.get("defaultSampleRate")),
-        input_device_index=int(input_info.get("index")),
-        input=True,
-        frames_per_buffer=WAV_CHUNK_SIZE,
-    )
+    opentelemetry.trace.get_current_span().set_attributes({
+        "wav-format": WAV_FORMAT,
+        "wav-chunk-size": WAV_CHUNK_SIZE,
+        "wav-audible-threshold": cfg.wav_threshold,
+        "wav-silent-frame-threshold": cfg.wav_silence_threshold,
+        "audio-device": int(input_info.get("index")),
+        "channels": channels,
+        "stop-fn": "None" if stop_fn is None else str(stop_fn)
+    })
 
-    num_silent = 0
-    snd_started = False
+    try:
+        logger.info("Opening pyAudio stream")
+        stream = pyaudio.open(
+            format=WAV_FORMAT,
+            channels=channels,
+            rate=int(input_info.get("defaultSampleRate")),
+            input_device_index=int(input_info.get("index")),
+            input=True,
+            frames_per_buffer=WAV_CHUNK_SIZE,
+        )
 
-    _r = array("h")
+        num_silent = 0
+        snd_started = False
 
-    logger.info("Detecting voice message")
-    while True:
-        # little endian, signed short
-        snd_data = array("h", stream.read(WAV_CHUNK_SIZE, exception_on_overflow=False))
-        if byteorder == "big":
-            snd_data.byteswap()
-        _r.extend(snd_data)
+        _r = array("h")
 
-        silent = _is_silent(snd_data, cfg)
+        logger.info("Detecting voice message")
+        while True:
+            # little endian, signed short
+            snd_data = array("h", stream.read(WAV_CHUNK_SIZE, exception_on_overflow=False))
+            if byteorder == "big":
+                snd_data.byteswap()
+            _r.extend(snd_data)
 
-        if silent:
-            if snd_started:
-                num_silent += 1
-        else:
-            if not snd_started:
-                snd_started = True
+            silent = _is_silent(snd_data, cfg)
+
+            if silent:
+                if snd_started:
+                    num_silent += 1
             else:
-                # We're resetting here, since we want to count CONSECUTIVE silent samples
-                num_silent = 0
+                if not snd_started:
+                    snd_started = True
+                else:
+                    # We're resetting here, since we want to count CONSECUTIVE silent samples
+                    num_silent = 0
 
-        if snd_started:
-            if stop_fn is not None:
-                if await stop_fn():
+            if snd_started:
+                if stop_fn is not None:
+                    if await stop_fn():
+                        logger.info(
+                            "Got the recording based on stop_fn. Formatting / returning"
+                        )
+                        break
+                elif num_silent > cfg.wav_silence_threshold:
                     logger.info(
-                        "Got the recording based on stop_fn. Formatting / returning"
+                        "Got the recording based on silence. Formatting / returning"
                     )
                     break
-            elif num_silent > cfg.wav_silence_threshold:
-                logger.info(
-                    "Got the recording based on silence. Formatting / returning"
-                )
-                break
 
-    logger.info("Finished capturing voice message")
+        opentelemetry.trace.get_current_span().set_attributes({
+            "wav-silent-frame-count": num_silent,
+            "wav-sound-detected": snd_started
+        })
 
-    sample_width = pyaudio.get_sample_size(WAV_FORMAT)
-    logger.debug("Got sample width %d", sample_width)
+        logger.info("Finished capturing voice message")
 
-    stream.stop_stream()
-    stream.close()
+        sample_width = pyaudio.get_sample_size(WAV_FORMAT)
+        logger.debug("Got sample width %d", sample_width)
 
-    _r = _trim(_r, cfg)
-    logger.info("audio sample has been trimmed to %d frames", len(_r))
-    return sample_width, _r
+        stream.stop_stream()
+        stream.close()
+
+        _r = _trim(_r, cfg)
+        logger.info("audio sample has been trimmed to %d frames", len(_r))
+        return sample_width, _r
+    except ValueError as error:
+        opentelemetry.trace.get_current_span().set_attributes({
+            "error.message": str(error),
+            "error.type": type(error)
+        })
 
 
 def _write_wav(
-    input_info: dict,
-    channels: int,
-    sample_width: int,
-    data: bytes,
-    _wf: wave.Wave_write,
+        input_info: dict,
+        channels: int,
+        sample_width: int,
+        data: bytes,
+        _wf: wave.Wave_write,
 ):
     """Take input from device recording (in memory) and write it to a WAV file"""
     _wf.setnchannels(channels)

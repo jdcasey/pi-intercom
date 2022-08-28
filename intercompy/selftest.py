@@ -3,7 +3,7 @@ Run various kinds of self-test on an installation environment.
 """
 from asyncio import gather, new_event_loop, set_event_loop
 
-from .config import Config
+from intercompy.config import Config
 
 
 def test_gpio(cfg: Config):

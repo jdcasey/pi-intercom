@@ -17,10 +17,9 @@
       vars:
         packages:
           - python3-pip
-          - python3-setuptools
+          - python3-poetry
           - python3-wheel
           - python3-venv
-          - python3-pygame # Keyboard GPIO simulation
           - python3-rpi.gpio # Pin / button listening, LED feedback, etc.
           - python3-ruamel.yaml # Configuration
           - python3-click # Command-line args
@@ -102,6 +101,8 @@
       loop:
         - pyrogram
         - tgcrypto
+      notify:
+        - restart intercompy
 
     - name: install intercompy
       ansible.builtin.pip:

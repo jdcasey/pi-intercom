@@ -39,6 +39,9 @@ TEXT_MESSAGE_LINE_ENDING = "text-message-line-ending"
 
 GPIO_SECTION = "pin-targets"
 
+TRACING_SECTION = "tracing"
+TRACING_INTERCOM_NAME = "intercom-name"
+
 DEFAULT_VOLUME = 100
 DEFAULT_WAV_THRESHOLD = 1000
 DEFAULT_WAV_SILENCE_THRESHOLD = 30
@@ -153,6 +156,18 @@ class Rolodex:
 
 
 # pylint: disable=too-few-public-methods
+class Tracing:
+    """Tracing configuration"""
+
+    def __init__(self, data: dict = None):
+        if data is None:
+            logger.debug("tracing config is None. Using empty dict.")
+            data = {}
+
+        self.intercom_name = data.get(TRACING_INTERCOM_NAME)
+
+
+# pylint: disable=too-few-public-methods
 class Config:
     """Contain the configuration parameters for intercompy"""
 
@@ -165,6 +180,7 @@ class Config:
             data.get(AUDIO_SECTION), os.path.join(app_state_dir, "audio")
         )
         self.rolodex = Rolodex(data.get(ROLODEX))
+        self.tracing = Tracing(data.get(TRACING_SECTION))
 
 
 def load_config(config_file: str = None) -> Config:

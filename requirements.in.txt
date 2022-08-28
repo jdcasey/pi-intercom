@@ -29,3 +29,10 @@ pydub
 
 # test processing
 nltk
+
+# o11y
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-otlp-proto-http
+opentelemetry-instrumentation-requests
+

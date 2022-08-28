@@ -1,15 +1,17 @@
 """Command-line interface for intercompy"""
 import logging
 from asyncio import gather, new_event_loop, set_event_loop
+import opentelemetry
 
 import click
 
-from . import selftest
-from .audio import setup_audio
-from .config import load_config, Config
-from .convo import start_telegram, setup_telegram
-from .gpio import init_pins, listen_for_pins
-from .util import setup_session
+from intercompy import selftest
+from intercompy.audio import setup_audio
+from intercompy.config import load_config, Config
+from intercompy.convo import start_telegram, setup_telegram
+from intercompy.gpio import init_pins, listen_for_pins
+from intercompy.util import setup_session
+from intercompy.tracing import setup_tracing, trace, get_tracer
 
 
 def _boot(config_file: str = None, debug: bool = False) -> Config:
@@ -24,11 +26,18 @@ def _boot(config_file: str = None, debug: bool = False) -> Config:
     )
 
     print("Loading intercom configuration")
-    return load_config(config_file)
+    cfg = load_config(config_file)
+
+    print("Setting up Opentelemetry tracing")
+    setup_tracing(cfg.tracing)
+
+    print("Intercompy boot-up complete. Application will now start...")
+    return cfg
 
 
 @click.command()
 @click.option("--config-file", "-f", help="Alternative config YAML")
+@trace
 def session_setup(config_file: str = None):
     """Interactively setup a new Telegram session for storage in config.yaml"""
     cfg = _boot(config_file, True)
@@ -53,14 +62,15 @@ def run(config_file: str = None, debug: bool = False):
 
     cfg = _boot(config_file, debug)
 
-    print("Setting up Telegram client")
-    app = setup_telegram(cfg)
+    with get_tracer().start_as_current_span("intercom-start"):
+        print("Setting up Telegram client")
+        app = setup_telegram(cfg)
 
-    print("Setting up hardware buttons")
-    init_pins(cfg.rolodex)
+        print("Setting up hardware buttons")
+        init_pins(cfg.rolodex)
 
-    print("Setting up audio prompts")
-    setup_audio(cfg.audio)
+        print("Setting up audio prompts")
+        setup_audio(cfg.audio)
 
     gather(start_telegram(app, cfg), listen_for_pins(app, cfg, loop))
 

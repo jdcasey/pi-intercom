@@ -6,7 +6,7 @@ from os import getenv
 
 from pyrogram import Client
 
-from .config import Config
+from intercompy.config import Config
 
 
 async def setup_session(cfg: Config):

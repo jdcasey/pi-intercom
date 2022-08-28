@@ -5,11 +5,12 @@ from asyncio import sleep
 from tempfile import NamedTemporaryFile
 from typing import Union
 
+from opentelemetry import trace
 from pyrogram import Client
 from pyrogram import filters
 from pyrogram.types import Message
 
-from .audio import (
+from intercompy.audio import (
     record_ogg,
     playback_ogg,
     play_impromptu_text,
@@ -20,16 +21,18 @@ from .audio import (
     SND_SNOOPING_AUDIO_START,
     SND_SENDING_MESSAGE,
 )
-from .config import Config, Telegram
-from .text import setup_text_analysis, format_inbound_message_for_speech
+from intercompy.config import Config, Telegram
+from intercompy.text import setup_text_analysis, format_inbound_message_for_speech
+from intercompy.tracing import trace
 
 COMMAND_PREFIXES = ["!", "/"]
 
 logger = logging.getLogger(__name__)
 
 
+@trace
 async def record_and_send(
-    target: Union[str, int], app: Client, cfg: Config, stop_fn=None
+        target: Union[str, int], app: Client, cfg: Config, stop_fn=None
 ):
     """Record and send a voice recording to the chat channel"""
     await play_prompt_text(SND_RECORD_YOUR_MESSAGE, cfg.audio)
@@ -88,6 +91,7 @@ async def start_telegram(app: Client, cfg: Config):
     @app.on_message(
         filters=filters.command(commands="audiograb", prefixes=COMMAND_PREFIXES)
     )
+    @trace
     async def audiograb(_client: Client, message: Message):
         """Record and send voice over Telegram"""
         await play_prompt_text(SND_SNOOPING_AUDIO_START, cfg.audio)
@@ -107,6 +111,7 @@ async def start_telegram(app: Client, cfg: Config):
     @app.on_message(
         filters=filters.command(commands="chatinfo", prefixes=COMMAND_PREFIXES)
     )
+    @trace
     async def chatinfo(_client: Client, message: Message):
         """Send the metadata about the current chat to Telegram"""
         msg = (
@@ -125,6 +130,7 @@ async def start_telegram(app: Client, cfg: Config):
     @app.on_message(
         filters=filters.command(commands="contacts", prefixes=COMMAND_PREFIXES)
     )
+    @trace
     async def contacts(client: Client, message: Message):
         """Send the list of registered contacts to Telegram"""
         entries = []
@@ -143,6 +149,7 @@ async def start_telegram(app: Client, cfg: Config):
         await message.reply_text(msg)
 
     @app.on_message(filters=filters.command(commands="help", prefixes=COMMAND_PREFIXES))
+    @trace
     async def show_help(_client: Client, message: Message):
         """Print command help to Telegram"""
         logger.debug(
@@ -160,14 +167,13 @@ async def start_telegram(app: Client, cfg: Config):
 
         await message.reply_text(msg)
 
-    # @app.on_message(group=-1)
-    # async def debug_channel(_client: Client, message: Message):
-    #     """Play a received channel message"""
-    #     print(message)
-
     @app.on_message(filters=filters.voice)
+    @trace
     async def play_voice_message(_client: Client, message: Message):
         """Play a received voice message"""
+        trace.get_current_span().set_attribute("voice.present",
+                                               1 if message.voice is not None else 0)
+
         if message.voice is not None:
             await play_impromptu_text(
                 f"New voice message from: {format_sender_name(message, cfg)}", cfg.audio
@@ -176,10 +182,10 @@ async def start_telegram(app: Client, cfg: Config):
             fext = message.voice.mime_type.split("/")[-1]
 
             with NamedTemporaryFile(
-                "wb",
-                prefix="intercom." + message.voice.file_unique_id + ".",
-                suffix="." + fext,
-                delete=False,
+                    "wb",
+                    prefix="intercom." + message.voice.file_unique_id + ".",
+                    suffix="." + fext,
+                    delete=False,
             ) as temp:
                 await message.download(file_name=temp.name)
 
@@ -190,20 +196,28 @@ async def start_telegram(app: Client, cfg: Config):
                 os.remove(temp.name)
 
     @app.on_message(filters=filters.text)
+    @trace
     async def play_prompt_text_message(_client: Client, message: Message):
         """Play a received voice message"""
+        trace.get_current_span().set_attribute("text.present",
+                                               1 if message.text is not None else 0)
+
         if message.text is not None:
-            formatted_txt = await format_inbound_message_for_speech(message.text, cfg)
+            formatted_txt = await format_inbound_message_for_speech(message.text, cfg.audio)
             await play_impromptu_text(
                 f"Text from: {format_sender_name(message, cfg)}. "
                 f"Message reads: {formatted_txt}",
                 cfg.audio,
             )
 
-    logger.debug("Starting Telegram client")
-    await app.start()
-    _me = await app.get_me()
-    logger.debug("Playing online sound")
-    await play_prompt_text(SND_INTERCOM_ONLINE, cfg.audio)
-    logger.debug("Sending hello to %s", cfg.telegram.chat)
-    await app.send_message(cfg.telegram.chat, f"{_me.username} is online 🎉")
+    @trace
+    async def do_startup():
+        logger.debug("Starting Telegram client")
+        await app.start()
+        _me = await app.get_me()
+        logger.debug("Playing online sound")
+        await play_prompt_text(SND_INTERCOM_ONLINE, cfg.audio)
+        logger.debug("Sending hello to %s", cfg.telegram.chat)
+        await app.send_message(cfg.telegram.chat, f"{_me.username} is online 🎉")
+
+    await do_startup()

@@ -3,7 +3,7 @@ from logging import getLogger
 
 import nltk
 
-from .config import Audio
+from intercompy.config import Audio
 
 logger = getLogger(__name__)
 
