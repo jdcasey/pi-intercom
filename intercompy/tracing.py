@@ -9,6 +9,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from intercompy.config import Tracing
 
 # pylint: disable=global-at-module-level
+# pylint: disable=global-statement
 TRACING_CONFIG = None
 
 
@@ -29,6 +30,7 @@ def setup_tracing(cfg: Tracing):
 
 
 def get_tracer():
+    """Return a tracer that can be used to open spans for code blocks"""
     return opentelemetry.trace.get_tracer("intercompy")
 
 
