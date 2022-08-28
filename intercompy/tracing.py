@@ -9,7 +9,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from intercompy.config import Tracing
 
 # pylint: disable=global-at-module-level
-global TRACING_CONFIG
+TRACING_CONFIG = None
 
 
 def setup_tracing(cfg: Tracing):
